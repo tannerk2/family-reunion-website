@@ -270,6 +270,12 @@ Resources:
           \nartifacts:\n  files:\n    - '**/*'\n"
       Cache:
         Type: NO_CACHE
+  GitHubConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName:
+        Fn::Sub: ${AWS::StackName}-github
+      ProviderType: GitHub
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -289,9 +295,11 @@ Resources:
             Category: Source
             Owner: AWS
             Version: 1
-            Provider: CodeCommit
+            Provider: CodeStarSourceConnection
           Configuration:
-            RepositoryName: family-reunion-website
+            ConnectionArn:
+              Ref: GitHubConnection
+            FullRepositoryId: tannerk2/family-reunion-website
             BranchName: main
           OutputArtifacts:
           - Name: SourceCode
