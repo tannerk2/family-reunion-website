@@ -261,6 +261,10 @@ Resources:
                 Action:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
+              - Effect: Allow
+                Resource: !Ref GitHubConnection
+                Action:
+                  - codestar-connections:UseConnection
 
   # CodeBuild Project
   CodeBuildProject:

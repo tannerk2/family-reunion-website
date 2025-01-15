@@ -248,6 +248,11 @@ Resources:
             Action:
             - codebuild:BatchGetBuilds
             - codebuild:StartBuild
+          - Effect: Allow
+            Resource:
+              Ref: GitHubConnection
+            Action:
+            - codestar-connections:UseConnection
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
