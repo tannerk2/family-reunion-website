@@ -23,49 +23,49 @@ Resources:
         WebsiteConfiguration:
           IndexDocument: index.html
           ErrorDocument: error.html
-    WebsiteBucketPolicy:
-      Type: AWS::S3::BucketPolicy
-      Properties:
-        Bucket: !Ref WebsiteBucket
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Principal: '*'
-              Action: s3:GetObject
-              Resource: !Sub '${WebsiteBucket.Arn}/*'
-CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
-      DistributionConfig:
-        Aliases:
-          - wadsworthreunion.com
-          - '*.wadsworthreunion.com'
-          - www.wadsworthreunion.com
-        ViewerCertificate:
-          AcmCertificateArn: !Ref AcmCertificateArn
-          SslSupportMethod: sni-only
-        Enabled: true
-        DefaultRootObject: index.html
-        Origins:
-        - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
-          Id: S3Origin
-          CustomOriginConfig:
-            HTTPPort: 80
-            HTTPSPort: 443
-            OriginProtocolPolicy: http-only
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+  CloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Aliases:
+            - wadsworthreunion.com
+            - '*.wadsworthreunion.com'
+            - www.wadsworthreunion.com
+          ViewerCertificate:
+            AcmCertificateArn: !Ref AcmCertificateArn
+            SslSupportMethod: sni-only
+          Enabled: true
+          DefaultRootObject: index.html
+          Origins:
+          - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
+            Id: S3Origin
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+          DefaultCacheBehavior:
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+          CustomErrorResponses:
+            - ErrorCode: 403
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
