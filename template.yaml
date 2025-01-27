@@ -332,40 +332,44 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
   CodeBuildServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: codebuild.amazonaws.com
-          Action: sts:AssumeRole
-      Policies:
-      - PolicyName: CodeBuildBasePolicy
-        PolicyDocument:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
           - Effect: Allow
-            Resource: '*'
-            Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-          - Effect: Allow
-            Resource:
-            - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}
-            - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}/*
-            - Fn::Sub: arn:aws:s3:::${DomainName}
-            - Fn::Sub: arn:aws:s3:::${DomainName}/*
-            Action:
-            - s3:GetObject
-            - s3:GetObjectVersion
-            - s3:PutObject
-            - s3:ListBucket
-            - s3:DeleteObject
-            - s3:GetBucketLocation
-            - s3:ListBucket
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+        Policies:
+        - PolicyName: CodeBuildBasePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Resource: '*'
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            - Effect: Allow
+              Resource:
+              - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}
+              - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}/*
+              - Fn::Sub: arn:aws:s3:::${DomainName}
+              - Fn::Sub: arn:aws:s3:::${DomainName}/*
+              Action:
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:PutObject
+              - s3:ListBucket
+              - s3:DeleteObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            - Effect: Allow
+              Action:
+              - cloudfront:CreateInvalidation
+              Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -449,22 +453,24 @@ Resources:
             Action:
             - codestar-connections:UseConnection
   CodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name:
-        Fn::Sub: ${AWS::StackName}-build
-      ServiceRole:
-        Fn::GetAtt:
-        - CodeBuildServiceRole
-        - Arn
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
-      Source:
-        Type: CODEPIPELINE
+      Type: AWS::CodeBuild::Project
+      Properties:
+        Name:
+          Fn::Sub: ${AWS::StackName}-build
+        ServiceRole:
+          Fn::GetAtt:
+          - CodeBuildServiceRole
+          - Arn
+        Artifacts:
+          Type: CODEPIPELINE
+        Environment:
+          Type: LINUX_CONTAINER
+          ComputeType: BUILD_GENERAL1_SMALL
+          Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        Source:
+          Type: CODEPIPELINE
+        Cache:
+          Type: NO_CACHE
   GitHubConnection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
@@ -472,73 +478,73 @@ Resources:
         Fn::Sub: ${AWS::StackName}-github
       ProviderType: GitHub
   Pipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      RoleArn:
-        Fn::GetAtt:
-        - CodePipelineServiceRole
-        - Arn
-      ArtifactStore:
-        Type: S3
-        Location:
-          Ref: PipelineArtifactsBucket
-      Stages:
-      - Name: Source
-        Actions:
+      Type: AWS::CodePipeline::Pipeline
+      Properties:
+        RoleArn:
+          Fn::GetAtt:
+          - CodePipelineServiceRole
+          - Arn
+        ArtifactStore:
+          Type: S3
+          Location:
+            Ref: PipelineArtifactsBucket
+        Stages:
         - Name: Source
-          ActionTypeId:
-            Category: Source
-            Owner: AWS
-            Version: 1
-            Provider: CodeStarSourceConnection
-          Configuration:
-            ConnectionArn:
-              Ref: GitHubConnection
-            FullRepositoryId: tannerk2/family-reunion-website
-            BranchName: main
-          OutputArtifacts:
-          - Name: SourceCode
-          RunOrder: 1
-      - Name: UpdateInfrastructure
-        Actions:
-        - Name: UpdateCloudFormation
-          ActionTypeId:
-            Category: Deploy
-            Owner: AWS
-            Version: 1
-            Provider: CloudFormation
-          Configuration:
-            ActionMode: CREATE_UPDATE
-            Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-            RoleArn: !GetAtt CloudFormationExecutionRole.Arn
-            StackName: !Ref AWS::StackName
-            TemplatePath: SourceCode::template.yaml
-            ParameterOverrides: !Sub |
-              {
-                "DomainName": "${DomainName}",
-                "AcmCertificateArn": "${AcmCertificateArn}"
-              }
-          InputArtifacts:
-          - Name: SourceCode
-          RunOrder: 1
-      - Name: Deploy
-        Actions:
-        - Name: DeployWebsite
-          ActionTypeId:
-            Category: Build
-            Owner: AWS
-            Version: 1
-            Provider: CodeBuild
-          Configuration:
-            ProjectName:
-              Ref: CodeBuildProject
-            EnvironmentVariables:
-              Fn::Sub: '[{"name":"WEBSITE_BUCKET","value":"${DomainName}"}]'
-          InputArtifacts:
-          - Name: SourceCode
-          OutputArtifacts:
-          - Name: BuildOutput
-          RunOrder: 1
+          Actions:
+          - Name: Source
+            ActionTypeId:
+              Category: Source
+              Owner: AWS
+              Version: 1
+              Provider: CodeStarSourceConnection
+            Configuration:
+              ConnectionArn:
+                Ref: GitHubConnection
+              FullRepositoryId: tannerk2/family-reunion-website
+              BranchName: main
+            OutputArtifacts:
+            - Name: SourceCode
+            RunOrder: 1
+        - Name: UpdateInfrastructure
+          Actions:
+          - Name: UpdateCloudFormation
+            ActionTypeId:
+              Category: Deploy
+              Owner: AWS
+              Version: 1
+              Provider: CloudFormation
+            Configuration:
+              ActionMode: CREATE_UPDATE
+              Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+              RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+              StackName: !Ref AWS::StackName
+              TemplatePath: SourceCode::template.yaml
+              ParameterOverrides: !Sub |
+                {
+                  "DomainName": "${DomainName}",
+                  "AcmCertificateArn": "${AcmCertificateArn}"
+                }
+            InputArtifacts:
+            - Name: SourceCode
+            RunOrder: 1
+        - Name: Deploy
+          Actions:
+          - Name: DeployWebsite
+            ActionTypeId:
+              Category: Build
+              Owner: AWS
+              Version: 1
+              Provider: CodeBuild
+            Configuration:
+              ProjectName:
+                Ref: CodeBuildProject
+              EnvironmentVariables:
+                Fn::Sub: '[{"name":"WEBSITE_BUCKET","value":"${DomainName}"},{"name":"CLOUDFRONT_ID","value":"${CloudFrontDistribution}"}]'
+            InputArtifacts:
+            - Name: SourceCode
+            OutputArtifacts:
+            - Name: BuildOutput
+            RunOrder: 1
 Outputs:
   WebsiteURL:
     Description: CloudFront Distribution Domain Name

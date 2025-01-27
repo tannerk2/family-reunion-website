@@ -3,6 +3,7 @@ phases:
   build:
     commands:
       - aws s3 sync . s3://${WEBSITE_BUCKET}/ --exclude "*" --include "*.html" --include "*.css" --include "*.js" --include "*.jpg" --include "*.png" --include "*.gif" --include "*.svg" --include "images/*" --include "assets/*"
+      - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_ID} --paths "/*"
 artifacts:
   files:
     - '**/*'
