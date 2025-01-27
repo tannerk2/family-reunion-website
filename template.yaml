@@ -146,8 +146,8 @@ Resources:
                   statusCode: 200,
                   headers: {
                     'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST'
                   },
                   body: ''
                 };
@@ -158,7 +158,9 @@ Resources:
                   return {
                     statusCode: 400,
                     headers: {
-                      'Access-Control-Allow-Origin': '*'
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                      'Access-Control-Allow-Methods': 'OPTIONS,POST'
                     },
                     body: JSON.stringify({ message: 'Missing request body' })
                   };
@@ -218,7 +220,9 @@ Resources:
                 return {
                   statusCode: 200,
                   headers: {
-                    'Access-Control-Allow-Origin': '*'
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST'
                   },
                   body: JSON.stringify({
                     message: 'RSVP recorded successfully',
@@ -230,9 +234,11 @@ Resources:
                 return {
                   statusCode: 500,
                   headers: {
-                    'Access-Control-Allow-Origin': '*'
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST'
                   },
-                  body: JSON.stringify({ message: 'Error processing RSVP' })
+                  body: JSON.stringify({ message: 'Error processing RSVP', error: error.message })
                 };
               }
             };
@@ -274,10 +280,18 @@ Resources:
         Type: AWS_PROXY
         Uri:
           Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
       ResourceId:
         Ref: ApiResource
       RestApiId:
         Ref: ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
   ApiCorsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -288,11 +302,13 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
               application/json: "{}"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
       ResourceId:
         Ref: ApiResource
       RestApiId:
