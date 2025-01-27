@@ -40,6 +40,9 @@
     </main>
 
     <script type="text/babel">
+        // Configuration
+        const API_ENDPOINT = 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp';
+
         const RSVPForm = () => {
             const [mainContact, setMainContact] = React.useState({
                 name: '',
@@ -50,6 +53,7 @@
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
             const [confirmationId, setConfirmationId] = React.useState('');
+            const [detailedError, setDetailedError] = React.useState('');
 
             const resetForm = () => {
                 setMainContact({ name: '', email: '' });
@@ -57,6 +61,7 @@
                 setGuests([{ name: '', age: '' }]);
                 setSubmitStatus({ type: '', message: '' });
                 setConfirmationId('');
+                setDetailedError('');
             };
 
             const handleMainContactChange = (e) => {
@@ -138,6 +143,7 @@
 
                 setIsSubmitting(true);
                 setSubmitStatus({ type: '', message: '' });
+                setDetailedError('');
 
                 const formData = {
                     mainContact,
@@ -146,7 +152,8 @@
                 };
 
                 try {
-                    const response = await fetch('https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp', {
+                    console.log('Submitting RSVP:', formData);
+                    const response = await fetch(API_ENDPOINT, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -155,6 +162,7 @@
                     });
 
                     const data = await response.json();
+                    console.log('Response:', data);
 
                     if (response.ok) {
                         setSubmitStatus({
@@ -164,14 +172,15 @@
                         setConfirmationId(data.confirmationId);
                         resetForm();
                     } else {
-                        throw new Error(data.message || 'Failed to submit RSVP');
+                        throw new Error(data.message || data.error || 'Failed to submit RSVP');
                     }
                 } catch (error) {
+                    console.error('Detailed error:', error);
+                    setDetailedError(error.message);
                     setSubmitStatus({
                         type: 'error',
                         message: 'Error submitting RSVP. Please try again later.'
                     });
-                    console.error('Error:', error);
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -186,6 +195,9 @@
                             submitStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                         }`}>
                             <p>{submitStatus.message}</p>
+                            {detailedError && (
+                                <p className="mt-2 text-sm">Error details: {detailedError}</p>
+                            )}
                             {confirmationId && (
                                 <p className="mt-2">Confirmation ID: {confirmationId}</p>
                             )}
@@ -267,7 +279,7 @@
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className={`w-full bg-blue-500 text-black text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
+                            className={`w-full bg-gradient-to-r from-orange-500 to-yellow-500 text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
                                 isSubmitting 
                                     ? 'opacity-50 cursor-not-allowed' 
                                     : 'hover:from-orange-600 hover:to-yellow-600 hover:scale-105'
