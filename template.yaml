@@ -465,11 +465,6 @@ Resources:
         Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "version: 0.2\nphases:\n  build:\n    commands:\n      - aws s3\
-          \ sync . s3://${WEBSITE_BUCKET}/ --exclude \".git/*\" --exclude \"buildspec.yml\"\
-          \nartifacts:\n  files:\n    - '**/*'\n"
-      Cache:
-        Type: NO_CACHE
   GitHubConnection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
