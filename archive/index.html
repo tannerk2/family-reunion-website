@@ -20,14 +20,14 @@
         <div class="max-w-4xl mx-auto">
             <!-- Countdown Banner -->
             <div class="bg-white bg-opacity-70 rounded-xl shadow-lg p-6 mb-8 text-center transform hover:scale-105 transition-transform duration-300">
-                <h2 class="text-2xl font-bold text-orange-600 mb-2">June 20-21, 2025</h2>
+                <h2 class="text-2xl font-bold text-orange-600 mb-2">Save the Date!</h2>
                 <p class="text-xl text-gray-700">Join us for two days of family, fun, and memories</p>
-                <div class="text-3xl font-bold text-orange-500 mt-4">Save the date!</div>
+                <div class="text-3xl font-bold text-orange-500 mt-4">June 20-21, 2025</div>
             </div>
 
             <!-- Event Details -->
             <section class="bg-white rounded-xl shadow-lg p-8 mb-8">
-                <h2 class="text-3xl font-bold text-orange-600 mb-6 text-center">Event Details</h2>
+                <h2 class="text-2xl font-bold text-orange-600 mb-6 text-center">Event Details</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="bg-orange-50 p-6 rounded-lg">
                         <h3 class="font-bold text-xl text-orange-600 mb-3 text-center">Day 1 - Friday, June 20</h3>
@@ -48,7 +48,7 @@
             <!-- Fun Footer -->
             <div class="text-center text-gray-600">
                 <p class="text-lg">Looking forward to seeing everyone!</p>
-                <p class="mt-2">Questions? Contact Kaitlyn Tanner at <span class="text-orange-600">(702) 335-4017 or wadsywoo@gmail.com</span></p>
+                <p class="mt-2">Questions? Contact Kaitlyn Tanner at <span class="text-orange-600">(702) 335-4017</span></p>
             </div>
         </div>
     </main>
@@ -61,17 +61,6 @@
             });
             const [guestCount, setGuestCount] = React.useState(1);
             const [guests, setGuests] = React.useState([{ name: '', age: '' }]);
-            const [isSubmitting, setIsSubmitting] = React.useState(false);
-            const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
-            const [confirmationId, setConfirmationId] = React.useState('');
-
-            const resetForm = () => {
-                setMainContact({ name: '', email: '' });
-                setGuestCount(1);
-                setGuests([{ name: '', age: '' }]);
-                setSubmitStatus({ type: '', message: '' });
-                setConfirmationId('');
-            };
 
             const handleMainContactChange = (e) => {
                 const { name, value } = e.target;
@@ -82,31 +71,23 @@
             };
 
             const handleGuestCountChange = (e) => {
-                const count = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 20);
+                const count = parseInt(e.target.value) || 1;
                 setGuestCount(count);
                 
+                // Update guests array to match new count
                 if (count > guests.length) {
+                    // Add new guest entries
                     setGuests(prev => [
                         ...prev,
                         ...Array(count - prev.length).fill({}).map(() => ({ name: '', age: '' }))
                     ]);
                 } else {
+                    // Remove extra guest entries
                     setGuests(prev => prev.slice(0, count));
                 }
             };
 
-            const validateAge = (age) => {
-                const parsedAge = parseInt(age);
-                return parsedAge >= 0 && parsedAge <= 120;
-            };
-
             const handleGuestChange = (index, field, value) => {
-                if (field === 'age' && value !== '') {
-                    if (!validateAge(value)) {
-                        return; // Don't update if age is invalid
-                    }
-                }
-                
                 setGuests(prev => {
                     const newGuests = [...prev];
                     newGuests[index] = {
@@ -117,42 +98,9 @@
                 });
             };
 
-            const validateForm = () => {
-                if (!mainContact.email || !mainContact.name) {
-                    setSubmitStatus({
-                        type: 'error',
-                        message: 'Please fill in your name and email'
-                    });
-                    return false;
-                }
-
-                const allGuestsValid = guests.every(guest => 
-                    guest.name.trim() && 
-                    guest.age !== '' && 
-                    validateAge(guest.age)
-                );
-
-                if (!allGuestsValid) {
-                    setSubmitStatus({
-                        type: 'error',
-                        message: 'Please fill in valid name and age for all guests'
-                    });
-                    return false;
-                }
-
-                return true;
-            };
-
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 
-                if (!validateForm()) {
-                    return;
-                }
-
-                setIsSubmitting(true);
-                setSubmitStatus({ type: '', message: '' });
-
                 const formData = {
                     mainContact,
                     guests,
@@ -168,44 +116,24 @@
                         body: JSON.stringify(formData)
                     });
 
-                    const data = await response.json();
-
                     if (response.ok) {
-                        setSubmitStatus({
-                            type: 'success',
-                            message: 'RSVP submitted successfully! We can\'t wait to see you!'
-                        });
-                        setConfirmationId(data.confirmationId);
-                        resetForm();
+                        alert('RSVP submitted successfully! We can\'t wait to see you!');
+                        // Reset form
+                        setMainContact({ name: '', email: '' });
+                        setGuestCount(1);
+                        setGuests([{ name: '', age: '' }]);
                     } else {
-                        throw new Error(data.message || 'Failed to submit RSVP');
+                        throw new Error('Failed to submit RSVP');
                     }
                 } catch (error) {
-                    setSubmitStatus({
-                        type: 'error',
-                        message: 'Error submitting RSVP. Please try again later.'
-                    });
+                    alert('Error submitting RSVP. Please try again later.');
                     console.error('Error:', error);
-                } finally {
-                    setIsSubmitting(false);
                 }
             };
 
             return (
                 <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
                     <h2 className="text-2xl font-bold text-orange-600 mb-6 text-center">RSVP by May 1st</h2>
-                    
-                    {submitStatus.message && (
-                        <div className={`p-4 mb-6 rounded-lg ${
-                            submitStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                            <p>{submitStatus.message}</p>
-                            {confirmationId && (
-                                <p className="mt-2">Confirmation ID: {confirmationId}</p>
-                            )}
-                        </div>
-                    )}
-
                     <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto">
                         {/* Main Contact Info */}
                         <div>
@@ -233,11 +161,10 @@
                         
                         {/* Number of Guests */}
                         <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Number of Guests (Maximum 20)</label>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Number of Guests</label>
                             <input
                                 type="number"
                                 min="1"
-                                max="20"
                                 value={guestCount}
                                 onChange={handleGuestCountChange}
                                 required
@@ -267,7 +194,6 @@
                                         <input
                                             type="number"
                                             min="0"
-                                            max="120"
                                             value={guest.age}
                                             onChange={(e) => handleGuestChange(index, 'age', e.target.value)}
                                             required
@@ -280,14 +206,9 @@
 
                         <button
                             type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full bg-blue-500 text-black text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
-                                isSubmitting 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : 'hover:from-orange-600 hover:to-yellow-600 hover:scale-105'
-                            }`}
+                            className="w-full bg-blue-500 from-orange-500 to-yellow-500 text-black text-lg font-bold py-3 px-6 rounded-lg hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all duration-200"
                         >
-                            {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
+                            Submit RSVP
                         </button>
                     </form>
                 </section>
