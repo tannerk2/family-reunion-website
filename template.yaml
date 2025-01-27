@@ -52,14 +52,12 @@ Resources:
         Enabled: true
         DefaultRootObject: index.html
         Origins:
-        - DomainName:
-            Fn::GetAtt:
-            - WebsiteBucket
-            - RegionalDomainName
+        - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
           Id: S3Origin
-          OriginAccessControlId: !Ref CloudFrontOriginAccessControl
-          S3OriginConfig:
-            OriginAccessIdentity: ''
+          CustomOriginConfig:
+            HTTPPort: 80
+            HTTPSPort: 443
+            OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -368,6 +366,33 @@ Resources:
             - s3:DeleteObject
             - s3:GetBucketLocation
             - s3:ListBucket
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudFormationExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - s3:*
+                  - lambda:*
+                  - dynamodb:*
+                  - apigateway:*
+                  - cloudfront:*
+                  - iam:*
+                  - codebuild:*
+                  - codepipeline:*
+                  - codestar-connections:*
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -391,6 +416,17 @@ Resources:
             - codecommit:GetCommit
             - codecommit:GetUploadArchiveStatus
             - codecommit:UploadArchive
+            - cloudformation:CreateStack
+            - cloudformation:DeleteStack
+            - cloudformation:DescribeStacks
+            - cloudformation:UpdateStack
+            - cloudformation:CreateChangeSet
+            - cloudformation:DeleteChangeSet
+            - cloudformation:DescribeChangeSet
+            - cloudformation:ExecuteChangeSet
+            - cloudformation:SetStackPolicy
+            - cloudformation:ValidateTemplate
+            - iam:PassRole
           - Effect: Allow
             Resource:
             - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}/*
@@ -468,9 +504,31 @@ Resources:
           OutputArtifacts:
           - Name: SourceCode
           RunOrder: 1
+      - Name: UpdateInfrastructure
+        Actions:
+        - Name: UpdateCloudFormation
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Version: 1
+            Provider: CloudFormation
+          Configuration:
+            ActionMode: CREATE_UPDATE
+            Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+            RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+            StackName: !Ref AWS::StackName
+            TemplatePath: SourceCode::template.yaml
+            ParameterOverrides: !Sub |
+              {
+                "DomainName": "${DomainName}",
+                "AcmCertificateArn": "${AcmCertificateArn}"
+              }
+          InputArtifacts:
+          - Name: SourceCode
+          RunOrder: 1
       - Name: Deploy
         Actions:
-        - Name: Deploy
+        - Name: DeployWebsite
           ActionTypeId:
             Category: Build
             Owner: AWS
