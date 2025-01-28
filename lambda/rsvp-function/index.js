@@ -11,6 +11,20 @@ const VALID_AGE_GROUPS = [
     'Baby (1 and under)'
 ];
 
+const isValidGuests = guests.every(guest => {
+    console.log('Validating guest:', guest);
+    console.log('Age validation:', {
+        hasName: !!guest.name,
+        isString: typeof guest.age === 'string',
+        isValidGroup: VALID_AGE_GROUPS.includes(guest.age),
+        receivedAge: guest.age
+    });
+    
+    return guest.name && 
+           typeof guest.age === 'string' && 
+           VALID_AGE_GROUPS.includes(guest.age);
+});
+
 exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
     
@@ -38,7 +52,12 @@ exports.handler = async (event) => {
         }
 
         const rsvpData = JSON.parse(event.body);
-        console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
+        console.log('Received data structure:', JSON.stringify(rsvpData, null, 2));
+        console.log('Guest data types:', rsvpData.guests.map(guest => ({
+            name: typeof guest.name,
+            age: typeof guest.age,
+            actualAge: guest.age
+        })));
         
         const { mainContact, guests, totalGuests } = rsvpData;
 
