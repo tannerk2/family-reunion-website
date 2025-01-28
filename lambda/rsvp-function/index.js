@@ -22,6 +22,7 @@ exports.handler = async (event) => {
 
     try {
         if (!event.body) {
+            console.log('Missing request body');
             return {
                 statusCode: 400,
                 headers: corsHeaders,
@@ -35,20 +36,29 @@ exports.handler = async (event) => {
         const rsvpData = JSON.parse(event.body);
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
 
-        // Detailed validation checks
-        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
+        // Log the main contact validation
+        const mainContactCheck = {
+            hasEmail: !!rsvpData.mainContact?.email,
+            hasName: !!rsvpData.mainContact?.name,
+            email: rsvpData.mainContact?.email,
+            name: rsvpData.mainContact?.name
+        };
+        console.log('Main contact validation:', mainContactCheck);
+
+        if (!mainContactCheck.hasEmail || !mainContactCheck.hasName) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({ 
                     message: 'Missing main contact information',
-                    detail: {
-                        hasEmail: !!rsvpData.mainContact?.email,
-                        hasName: !!rsvpData.mainContact?.name
-                    }
+                    detail: mainContactCheck
                 })
             };
         }
+
+        // Log the guests array check
+        console.log('Guests array type:', typeof rsvpData.guests);
+        console.log('Is array?', Array.isArray(rsvpData.guests));
 
         if (!Array.isArray(rsvpData.guests)) {
             return {
@@ -61,18 +71,28 @@ exports.handler = async (event) => {
             };
         }
 
-        // Validate each guest with detailed feedback
-        const guestValidations = rsvpData.guests.map((guest, index) => ({
-            index,
-            hasName: !!guest.name,
-            hasAge: !!guest.age,
-            isAgeValid: VALID_AGE_GROUPS.includes(guest.age),
-            providedAge: guest.age
-        }));
+        // Log valid age groups for reference
+        console.log('Valid age groups:', VALID_AGE_GROUPS);
+
+        // Detailed guest validation with logging
+        const guestValidations = rsvpData.guests.map((guest, index) => {
+            const validation = {
+                index,
+                originalGuest: guest,
+                hasName: !!guest.name,
+                hasAge: !!guest.age,
+                isAgeValid: VALID_AGE_GROUPS.includes(guest.age),
+                providedAge: guest.age
+            };
+            console.log(`Guest ${index} validation:`, validation);
+            return validation;
+        });
 
         const invalidGuests = guestValidations.filter(v => 
             !v.hasName || !v.hasAge || !v.isAgeValid
         );
+
+        console.log('Invalid guests:', invalidGuests);
 
         if (invalidGuests.length > 0) {
             return {
@@ -87,6 +107,12 @@ exports.handler = async (event) => {
                 })
             };
         }
+
+        // Log guest count validation
+        console.log('Guest count validation:', {
+            expectedTotal: rsvpData.totalGuests,
+            actualCount: rsvpData.guests.length
+        });
 
         if (rsvpData.totalGuests !== rsvpData.guests.length) {
             return {
