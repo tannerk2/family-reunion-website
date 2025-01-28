@@ -276,8 +276,7 @@ RSVPFunction:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name:
-        Fn::Sub: ${DomainName}-api
+      Name: !Sub ${DomainName}-api
       EndpointConfiguration:
         Types:
           - REGIONAL
