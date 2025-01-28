@@ -124,7 +124,7 @@ Resources:
                   Fn::GetAtt:
                     - RSVPTable
                     - Arn
-  RSVPFunction:
+RSVPFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName:
@@ -134,6 +134,16 @@ Resources:
         Fn::GetAtt:
           - LambdaExecutionRole
           - Arn
+      Runtime: nodejs18.x
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          RSVP_TABLE_NAME:
+            Fn::Sub: ${DomainName}-rsvp
+      Tags:
+        - Key: Purpose
+          Value: RSVP Processing
       Code:
         ZipFile: |
           const AWS = require('aws-sdk');
@@ -271,10 +281,6 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Cors:
-        AllowMethods: "'POST,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
 
   ApiResource:
     Type: AWS::ApiGateway::Resource
