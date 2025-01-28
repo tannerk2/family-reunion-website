@@ -131,10 +131,13 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:GetItem
                   - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
                 Resource:
-                  Fn::GetAtt:
-                    - RSVPTable
-                    - Arn
+                  - !GetAtt RSVPTable.Arn
+                  - !Sub "${RSVPTable.Arn}/index/*"
   RSVPFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -147,155 +150,11 @@ Resources:
           - Arn
       Code:
         ZipFile: |
-          const https = require('https');
-          const crypto = require('crypto');
+          const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+          const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
-          // AWS Signature V4 signing
-          function sign(key, msg) {
-            return crypto.createHmac('sha256', key).update(msg).digest();
-          }
-
-          function getSignatureKey(key, dateStamp, regionName, serviceName) {
-            const kDate = sign(('AWS4' + key), dateStamp);
-            const kRegion = sign(kDate, regionName);
-            const kService = sign(kRegion, serviceName);
-            const kSigning = sign(kService, 'aws4_request');
-            return kSigning;
-          }
-
-          function sha256(str) {
-            return crypto.createHash('sha256').update(str).digest('hex');
-          }
-
-          // DynamoDB client with AWS Signature V4
-          const dynamoDB = {
-            async put(params) {
-              const service = 'dynamodb';
-              const region = process.env.AWS_REGION;
-              const host = `dynamodb.${region}.amazonaws.com`;
-              const endpoint = '/';
-              
-              // AWS Signature V4 required headers
-              const amzTarget = 'DynamoDB_20120810.PutItem';
-              const requestBody = JSON.stringify({
-                TableName: params.TableName,
-                Item: marshallItem(params.Item)
-              });
-              
-              const currentDate = new Date();
-              const amzDate = currentDate.toISOString().replace(/[:-]|\.\d{3}/g, '');
-              const dateStamp = amzDate.slice(0, 8);
-
-              // Create canonical request
-              const canonicalHeaders = [
-                `content-type:application/x-amz-json-1.0`,
-                `host:${host}`,
-                `x-amz-date:${amzDate}`,
-                `x-amz-target:${amzTarget}`,
-              ].join('\n') + '\n';
-
-              const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
-
-              const canonicalRequest = [
-                'POST',
-                endpoint,
-                '',
-                canonicalHeaders,
-                signedHeaders,
-                sha256(requestBody),
-              ].join('\n');
-
-              // Create string to sign
-              const algorithm = 'AWS4-HMAC-SHA256';
-              const credentialScope = [dateStamp, region, service, 'aws4_request'].join('/');
-              const stringToSign = [
-                algorithm,
-                amzDate,
-                credentialScope,
-                sha256(canonicalRequest),
-              ].join('\n');
-
-              // Calculate signature
-              const signingKey = getSignatureKey(
-                process.env.AWS_SECRET_ACCESS_KEY,
-                dateStamp,
-                region,
-                service
-              );
-              const signature = crypto
-                .createHmac('sha256', signingKey)
-                .update(stringToSign)
-                .digest('hex');
-
-              // Create authorization header
-              const authorizationHeader = [
-                `${algorithm} Credential=${process.env.AWS_ACCESS_KEY_ID}/${credentialScope}`,
-                `SignedHeaders=${signedHeaders}`,
-                `Signature=${signature}`,
-              ].join(', ');
-
-              return new Promise((resolve, reject) => {
-                const request = {
-                  hostname: host,
-                  port: 443,
-                  path: endpoint,
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/x-amz-json-1.0',
-                    'X-Amz-Target': amzTarget,
-                    'X-Amz-Date': amzDate,
-                    'Authorization': authorizationHeader,
-                    'Host': host
-                  }
-                };
-
-                const req = https.request(request, (res) => {
-                  let data = '';
-                  res.on('data', chunk => { data += chunk; });
-                  res.on('end', () => {
-                    if (res.statusCode >= 200 && res.statusCode < 300) {
-                      try {
-                        resolve(JSON.parse(data));
-                      } catch (e) {
-                        resolve(data);
-                      }
-                    } else {
-                      reject(new Error(`DynamoDB request failed: ${data}`));
-                    }
-                  });
-                });
-
-                req.on('error', (error) => {
-                  reject(error);
-                });
-
-                req.write(requestBody);
-                req.end();
-              });
-            }
-          };
-
-          // Helper function to convert JavaScript types to DynamoDB AttributeValue format
-          function marshallItem(item) {
-            const marshalled = {};
-            for (const [key, value] of Object.entries(item)) {
-              if (typeof value === 'string') {
-                marshalled[key] = { S: value };
-              } else if (typeof value === 'number') {
-                marshalled[key] = { N: value.toString() };
-              } else if (Array.isArray(value)) {
-                marshalled[key] = { L: value.map(v => {
-                  if (typeof v === 'object') {
-                    return { M: marshallItem(v) };
-                  }
-                  return typeof v === 'string' ? { S: v } : { N: v.toString() };
-                })};
-              } else if (typeof value === 'object') {
-                marshalled[key] = { M: marshallItem(value) };
-              }
-            }
-            return marshalled;
-          }
+          const client = new DynamoDBClient({});
+          const docClient = DynamoDBDocumentClient.from(client);
 
           exports.handler = async (event) => {
             console.log('Received event:', JSON.stringify(event, null, 2));
@@ -364,10 +223,19 @@ Resources:
 
               console.log('Attempting to save item:', JSON.stringify(item, null, 2));
 
-              await dynamoDB.put({
-                TableName: process.env.RSVP_TABLE_NAME,
-                Item: item
-              });
+              try {
+                const command = new PutCommand({
+                  TableName: process.env.RSVP_TABLE_NAME,
+                  Item: item
+                });
+                
+                console.log('Executing PutCommand:', JSON.stringify(command.input, null, 2));
+                const result = await docClient.send(command);
+                console.log('PutCommand result:', JSON.stringify(result, null, 2));
+              } catch (dbError) {
+                console.error('DynamoDB error:', dbError);
+                throw dbError;
+              }
 
               console.log('Successfully saved item');
 
@@ -398,6 +266,8 @@ Resources:
         Variables:
           RSVP_TABLE_NAME:
             Ref: RSVPTable
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:094274105915:layer:AWSSDKv3-Node18:10
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
