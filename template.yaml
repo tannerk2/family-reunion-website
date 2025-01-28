@@ -136,120 +136,117 @@ Resources:
                     - RSVPTable
                     - Arn
   RSVPFunction:
-      Type: AWS::Lambda::Function
-      Properties:
-        FunctionName:
-          Fn::Sub: ${DomainName}-rsvp
-        Handler: index.handler
-        Role:
-          Fn::GetAtt:
-            - LambdaExecutionRole
-            - Arn
-        Code:
-          ZipFile: |
-            const AWS = require('aws-sdk');
-            const dynamoDB = new AWS.DynamoDB.DocumentClient();
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${DomainName}-rsvp
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+          const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
-            exports.handler = async (event) => {
-              // Set a single origin
-              const corsHeaders = {
-                'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-                'Access-Control-Allow-Methods': 'OPTIONS,POST'
+          const client = new DynamoDBClient({});
+          const dynamoDB = DynamoDBDocumentClient.from(client);
+
+          exports.handler = async (event) => {
+            const corsHeaders = {
+              'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
+              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+              'Access-Control-Allow-Methods': 'OPTIONS,POST'
+            };
+
+            if (event.httpMethod === 'OPTIONS') {
+              return {
+                statusCode: 200,
+                headers: corsHeaders,
+                body: ''
+              };
+            }
+
+            try {
+              if (!event.body) {
+                return {
+                  statusCode: 400,
+                  headers: corsHeaders,
+                  body: JSON.stringify({ message: 'Missing request body' })
+                };
+              }
+
+              const rsvpData = JSON.parse(event.body);
+              const { mainContact, guests, totalGuests } = rsvpData;
+
+              if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
+                return {
+                  statusCode: 400,
+                  headers: corsHeaders,
+                  body: JSON.stringify({ message: 'Missing required fields' })
+                };
+              }
+
+              const isValidGuests = guests.every(guest => 
+                guest.name && 
+                typeof guest.age === 'string' && 
+                parseInt(guest.age) >= 0 && 
+                parseInt(guest.age) <= 120
+              );
+
+              if (!isValidGuests) {
+                return {
+                  statusCode: 400,
+                  headers: corsHeaders,
+                  body: JSON.stringify({ message: 'Invalid guest data' })
+                };
+              }
+
+              const item = {
+                email: mainContact.email,
+                submissionDate: new Date().toISOString(),
+                name: mainContact.name,
+                totalGuests,
+                guests: guests.map(guest => ({
+                  name: guest.name,
+                  age: parseInt(guest.age, 10)
+                }))
               };
 
-              // Handle CORS preflight requests
-              if (event.httpMethod === 'OPTIONS') {
-                return {
-                  statusCode: 200,
-                  headers: corsHeaders,
-                  body: ''
-                };
-              }
-
-              try {
-                if (!event.body) {
-                  return {
-                    statusCode: 400,
-                    headers: corsHeaders,
-                    body: JSON.stringify({ message: 'Missing request body' })
-                  };
-                }
-
-                // Parse the incoming request body
-                const rsvpData = JSON.parse(event.body);
-                const { mainContact, guests, totalGuests } = rsvpData;
-
-                // Basic validation
-                if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
-                  return {
-                    statusCode: 400,
-                    headers: corsHeaders,
-                    body: JSON.stringify({ message: 'Missing required fields' })
-                  };
-                }
-
-                // Validate guest data
-                const isValidGuests = guests.every(guest => 
-                  guest.name && 
-                  typeof guest.age === 'string' && 
-                  parseInt(guest.age) >= 0 && 
-                  parseInt(guest.age) <= 120
-                );
-
-                if (!isValidGuests) {
-                  return {
-                    statusCode: 400,
-                    headers: corsHeaders,
-                    body: JSON.stringify({ message: 'Invalid guest data' })
-                  };
-                }
-
-                // Prepare DynamoDB item
-                const item = {
-                  email: mainContact.email,
-                  submissionDate: new Date().toISOString(),
-                  name: mainContact.name,
-                  totalGuests,
-                  guests: guests.map(guest => ({
-                    name: guest.name,
-                    age: parseInt(guest.age, 10)
-                  }))
-                };
-
-                // Store in DynamoDB
-                await dynamoDB.put({
+              await dynamoDB.send(
+                new PutCommand({
                   TableName: process.env.RSVP_TABLE_NAME,
                   Item: item
-                }).promise();
+                })
+              );
 
-                return {
-                  statusCode: 200,
-                  headers: corsHeaders,
-                  body: JSON.stringify({
-                    message: 'RSVP recorded successfully',
-                    confirmationId: item.submissionDate
-                  })
-                };
-              } catch (error) {
-                console.error('Error processing RSVP:', error);
-                return {
-                  statusCode: 500,
-                  headers: corsHeaders,
-                  body: JSON.stringify({ message: 'Error processing RSVP' })
-                };
-              }
-            };
-        Runtime: nodejs18.x
-        Timeout: 30
-        MemorySize: 128
-        Environment:
-          Variables:
-            RSVP_TABLE_NAME:
-              Ref: RSVPTable
-        Tags:
-          - Key: Purpose
-            Value: RSVP Processing
+              return {
+                statusCode: 200,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                  message: 'RSVP recorded successfully',
+                  confirmationId: item.submissionDate
+                })
+              };
+            } catch (error) {
+              console.error('Error processing RSVP:', error);
+              return {
+                statusCode: 500,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: 'Error processing RSVP' })
+              };
+            }
+          };
+      Runtime: nodejs18.x
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          RSVP_TABLE_NAME:
+            Ref: RSVPTable
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:094274105915:layer:AWSSDKv3-Node18:10
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
