@@ -156,7 +156,7 @@ Resources:
                 'https://www.wadsworthreunion.com'
               ];
               
-              const origin = event.headers.origin || event.headers.Origin;
+              const origin = event.headers.origin || event.headers.origin;
               
               // Set CORS headers based on the request origin
               const corsHeaders = {
@@ -262,7 +262,7 @@ Resources:
         Environment:
           Variables:
             RSVP_TABLE_NAME:
-              Fn::Sub: ${DomainName}-rsvp
+              Ref: RSVPTable
         Tags:
           - Key: Purpose
             Value: RSVP Processing
@@ -337,6 +337,7 @@ Resources:
     Properties:
       RestApiId:
         Ref: ApiGateway
+      StageName: prod
   ApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
