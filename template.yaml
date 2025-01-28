@@ -142,12 +142,13 @@ Resources:
                 Forward: none
             LambdaFunctionAssociations:
               - EventType: viewer-request
-                LambdaFunctionARN: !Ref RedirectFunction
+                LambdaFunctionARN: !Ref RedirectFunctionVersion
 
   # Add a Lambda@Edge function for the redirect
   RedirectFunction:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName: !Sub ${AWS::StackName}-redirect
       Code:
         ZipFile: |
           exports.handler = async (event) => {
@@ -177,6 +178,14 @@ Resources:
       Handler: index.handler
       Role: !GetAtt LambdaEdgeRole.Arn
       Runtime: nodejs18.x
+      Timeout: 5
+      MemorySize: 128
+
+  RedirectFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref RedirectFunction
+      Description: 'Version for CloudFront Lambda@Edge'
 
   # Add IAM role for Lambda@Edge
   LambdaEdgeRole:
