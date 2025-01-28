@@ -147,11 +147,50 @@ Resources:
           - Arn
       Code:
         ZipFile: |
-          const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-          const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+          // DynamoDB client for Node.js runtime
+          const dynamoDB = {
+            async put(params) {
+              const response = await fetch(`https://dynamodb.${process.env.AWS_REGION}.amazonaws.com`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-amz-json-1.0',
+                  'X-Amz-Target': 'DynamoDB_20120810.PutItem'
+                },
+                body: JSON.stringify({
+                  TableName: params.TableName,
+                  Item: marshallItem(params.Item)
+                })
+              });
+              
+              if (!response.ok) {
+                throw new Error(`DynamoDB PutItem failed: ${await response.text()}`);
+              }
+              
+              return response.json();
+            }
+          };
 
-          const client = new DynamoDBClient({});
-          const dynamoDB = DynamoDBDocumentClient.from(client);
+          // Helper function to convert JavaScript types to DynamoDB AttributeValue format
+          function marshallItem(item) {
+            const marshalled = {};
+            for (const [key, value] of Object.entries(item)) {
+              if (typeof value === 'string') {
+                marshalled[key] = { S: value };
+              } else if (typeof value === 'number') {
+                marshalled[key] = { N: value.toString() };
+              } else if (Array.isArray(value)) {
+                marshalled[key] = { L: value.map(v => {
+                  if (typeof v === 'object') {
+                    return { M: marshallItem(v) };
+                  }
+                  return typeof v === 'string' ? { S: v } : { N: v.toString() };
+                })};
+              } else if (typeof value === 'object') {
+                marshalled[key] = { M: marshallItem(value) };
+              }
+            }
+            return marshalled;
+          }
 
           exports.handler = async (event) => {
             const corsHeaders = {
@@ -214,12 +253,10 @@ Resources:
                 }))
               };
 
-              await dynamoDB.send(
-                new PutCommand({
-                  TableName: process.env.RSVP_TABLE_NAME,
-                  Item: item
-                })
-              );
+              await dynamoDB.put({
+                TableName: process.env.RSVP_TABLE_NAME,
+                Item: item
+              });
 
               return {
                 statusCode: 200,
@@ -245,8 +282,8 @@ Resources:
         Variables:
           RSVP_TABLE_NAME:
             Ref: RSVPTable
-      Layers:
-        - !Sub arn:aws:lambda:${AWS::Region}:094274105915:layer:AWSSDKv3-Node18:10
+          AWS_REGION:
+            Ref: AWS::Region
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -388,7 +425,7 @@ Resources:
               Action:
               - cloudfront:CreateInvalidation
               Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
-CloudFormationExecutionRole:
+  CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -415,10 +452,6 @@ CloudFormationExecutionRole:
                   - codebuild:*
                   - codepipeline:*
                   - codestar-connections:*
-              - Effect: Allow
-                Resource: 'arn:aws:lambda:*:094274105915:layer:AWSSDKv3-Node18:*'
-                Action:
-                  - lambda:GetLayerVersion
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
