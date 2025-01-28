@@ -32,13 +32,13 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: '*'
+            Principal:
+              Service: cloudfront.amazonaws.com
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
             Condition:
-              IpAddress:
-                aws:SourceIp:
-                  - !Sub ${CloudFrontDistribution.DomainName}
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
