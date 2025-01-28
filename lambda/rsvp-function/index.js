@@ -68,6 +68,12 @@ exports.handler = async (event) => {
             };
         }
 
+        console.log('Validation check:', {
+            validGroups: VALID_AGE_GROUPS,
+            receivedAges: rsvpData.guests.map(g => g.age),
+            includes: rsvpData.guests.map(g => VALID_AGE_GROUPS.includes(g.age))
+        });
+
         // Check guest data validity
         const invalidGuests = rsvpData.guests.filter(guest => 
             !guest.name || !guest.age || !VALID_AGE_GROUPS.includes(guest.age)
