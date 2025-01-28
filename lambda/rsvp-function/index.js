@@ -1,146 +1,138 @@
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-
 const { marshall } = require('@aws-sdk/util-dynamodb');
 
-
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
-
 const VALID_AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
 
 exports.handler = async (event) => {
-    console.log('Environment variables:', {
+    // Log initial event and environment
+    console.log('Environment check:', {
         tableName: process.env.RSVP_TABLE_NAME,
-        hasTableName: !!process.env.RSVP_TABLE_NAME
+        hasTableName: !!process.env.RSVP_TABLE_NAME,
+        nodeEnv: process.env.NODE_ENV,
+        allVars: process.env
     });
     
+    console.log('Event received:', JSON.stringify(event, null, 2));
+    
     const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'OPTIONS,POST'
     };
-    
-    const createResponse = (statusCode, body) => ({
-        statusCode,
-        headers: corsHeaders,
-        body: JSON.stringify(body)
-    });
 
     try {
-        const rsvpData = JSON.parse(event.body);
+        // Parse and log the request body
+        const rsvpData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
 
-        console.log('Debug validation:', {
-            VALID_AGE_GROUPS,
-            receivedGuests: rsvpData.guests,
-            checkFirstGuest: VALID_AGE_GROUPS.includes(rsvpData.guests[0].age),
-            checkSecondGuest: VALID_AGE_GROUPS.includes(rsvpData.guests[1].age),
-            arrayType: typeof VALID_AGE_GROUPS,
-            isArray: Array.isArray(VALID_AGE_GROUPS)
+        // Log validation details
+        console.log('Validation details:', {
+            mainContact: {
+                hasEmail: !!rsvpData.mainContact?.email,
+                hasName: !!rsvpData.mainContact?.name,
+                email: rsvpData.mainContact?.email,
+                name: rsvpData.mainContact?.name
+            },
+            guests: {
+                isArray: Array.isArray(rsvpData.guests),
+                length: rsvpData.guests?.length,
+                expectedTotal: rsvpData.totalGuests,
+                ages: rsvpData.guests?.map(g => g.age),
+                validAgeGroups: VALID_AGE_GROUPS
+            }
         });
 
-        // Log the actual validation checks
-        console.log('Validation checks:', {
-            mainContactValid: !!(rsvpData.mainContact?.email && rsvpData.mainContact?.name),
-            isGuestsArray: Array.isArray(rsvpData.guests),
-            guestCount: rsvpData.totalGuests,
-            actualGuestCount: rsvpData.guests?.length,
-            guestsValid: rsvpData.guests?.every(guest => {
-                const isValid = guest.name && guest.age && VALID_AGE_GROUPS.includes(guest.age);
-                console.log('Guest check:', {
-                    name: guest.name,
-                    age: guest.age,
-                    isNameValid: !!guest.name,
-                    isAgeValid: VALID_AGE_GROUPS.includes(guest.age)
-                });
-                return isValid;
-            })
-        });
+        // Main contact validation
+        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
+            console.log('Main contact validation failed');
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid main contact data',
+                    detail: {
+                        mainContact: rsvpData.mainContact,
+                        validation: {
+                            hasEmail: !!rsvpData.mainContact?.email,
+                            hasName: !!rsvpData.mainContact?.name
+                        }
+                    }
+                })
+            };
+        }
+
+        // Guest array validation
+        if (!Array.isArray(rsvpData.guests)) {
+            console.log('Guest array validation failed');
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Guests must be an array',
+                    detail: { 
+                        receivedType: typeof rsvpData.guests,
+                        guests: rsvpData.guests 
+                    }
+                })
+            };
+        }
+
+        // Guest count validation
+        if (rsvpData.totalGuests !== rsvpData.guests.length) {
+            console.log('Guest count validation failed');
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Guest count mismatch',
+                    detail: {
+                        expected: rsvpData.totalGuests,
+                        actual: rsvpData.guests.length
+                    }
+                })
+            };
+        }
 
         // Individual guest validation
-        if (Array.isArray(rsvpData.guests)) {
-            rsvpData.guests.forEach((guest, index) => {
-                console.log(`Guest ${index} validation:`, {
-                    name: guest.name,
-                    age: guest.age,
-                    isNameValid: !!guest.name,
-                    isAgeValid: VALID_AGE_GROUPS.includes(guest.age),
-                    ageInList: VALID_AGE_GROUPS.includes(guest.age),
-                    exactMatch: VALID_AGE_GROUPS.find(age => age === guest.age)
-                });
-            });
-        }
-
-        // Check guest count match
-        if (rsvpData.totalGuests !== rsvpData.guests.length) {
-            return createResponse(400, {
-                message: 'Guest count mismatch',
-                detail: {
-                    expected: rsvpData.totalGuests,
-                    actual: rsvpData.guests.length
-                }
-            });
-        }
-
-        console.log('Validation check:', {
-            validGroups: VALID_AGE_GROUPS,
-            receivedAges: rsvpData.guests.map(g => g.age),
-            includes: rsvpData.guests.map(g => VALID_AGE_GROUPS.includes(g.age))
-        });
-
-        console.log('Pre-validation details:', {
-            VALID_AGE_GROUPS,
-            guestData: rsvpData.guests.map(g => ({
-                name: g.name,
-                age: g.age,
-                nameValid: !!g.name,
-                ageValid: !!g.age,
-                ageInList: VALID_AGE_GROUPS.includes(g.age),
-                validationResult: !g.name || !g.age || !VALID_AGE_GROUPS.includes(g.age)
-            }))
-        });
-
-        // Check guest data validity
-        const invalidGuests = rsvpData.guests.filter(guest => {
-            const nameInvalid = !guest.name;
-            const ageInvalid = !guest.age;
-            const ageNotInList = !VALID_AGE_GROUPS.includes(guest.age);
-            const isInvalid = nameInvalid || ageInvalid || ageNotInList;
-            
-            console.log('Guest validation:', {
+        console.log('Starting individual guest validation');
+        const guestValidation = rsvpData.guests.map((guest, index) => {
+            const validation = {
+                index,
                 name: guest.name,
                 age: guest.age,
-                nameInvalid,
-                ageInvalid,
-                ageNotInList,
-                isInvalid
-            });
-            
-            return isInvalid;
+                nameValid: !!guest.name,
+                ageValid: VALID_AGE_GROUPS.includes(guest.age),
+            };
+            console.log(`Guest ${index} validation:`, validation);
+            return validation;
         });
 
-        console.log('Invalid guests result:', {
-            count: invalidGuests.length,
-            guests: invalidGuests
-        });
+        const invalidGuests = guestValidation.filter(g => !g.nameValid || !g.ageValid);
 
         if (invalidGuests.length > 0) {
-            return createResponse(400, {
-                message: 'Invalid guest data',
-                detail: {
-                    invalidGuests,
-                    VALID_AGE_GROUPS,
-                    validationResults: rsvpData.guests.map(guest => ({
-                        name: guest.name,
-                        age: guest.age,
-                        nameValid: !!guest.name,
-                        ageValid: !!guest.age,
-                        ageInList: VALID_AGE_GROUPS.includes(guest.age)
-                    }))
-                }
-            });
+            console.log('Guest validation failed:', invalidGuests);
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid guest data',
+                    detail: {
+                        invalidGuests,
+                        validAgeGroups: VALID_AGE_GROUPS,
+                        allValidations: guestValidation
+                    }
+                })
+            };
         }
 
-        // Proceed with saving if everything is valid
+        // DynamoDB Table check
+        if (!process.env.RSVP_TABLE_NAME) {
+            console.error('Missing RSVP_TABLE_NAME environment variable');
+            throw new Error('Configuration error: Missing table name');
+        }
+
+        // Proceed with saving
         const submissionDate = new Date().toISOString();
         const item = {
             email: rsvpData.mainContact.email.trim().toLowerCase(),
@@ -153,29 +145,43 @@ exports.handler = async (event) => {
             }))
         };
 
+        console.log('Attempting to save item:', JSON.stringify(item, null, 2));
+
         const command = new PutItemCommand({
             TableName: process.env.RSVP_TABLE_NAME,
             Item: marshall(item)
         });
 
         await dynamoDB.send(command);
+        console.log('Successfully saved to DynamoDB');
 
-        return createResponse(200, {
-            message: 'RSVP recorded successfully',
-            confirmationId: submissionDate
-        });
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'RSVP recorded successfully',
+                confirmationId: submissionDate
+            })
+        };
 
     } catch (error) {
-        console.error('Error details:', {
+        console.error('Error processing request:', {
             error: error.message,
             stack: error.stack,
             type: error.constructor.name
         });
         
-        return createResponse(500, {
-            message: 'Error processing RSVP',
-            error: error.message,
-            detail: error.stack
-        });
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'Error processing RSVP',
+                error: error.message,
+                detail: {
+                    type: error.constructor.name,
+                    stack: error.stack
+                }
+            })
+        };
     }
 };
