@@ -45,7 +45,7 @@
 
         const RSVPForm = () => {
 
-            const VALID_AGE_GROUPS = [
+            const AGE_GROUPS = [
                 'Adult (18+)',
                 'Teen (13-17)',
                 'Kid (6-12)',
@@ -94,14 +94,10 @@
                 }
             };
 
-            const validateAgeGroup = (ageGroup) => {
-                return AGE_GROUPS.includes(ageGroup);
-            };
-
             const handleGuestChange = (index, field, value) => {
                 if (field === 'age' && value !== '') {
                     if (!validateAgeGroup(value)) {
-                        return; // Don't update if age group is invalid
+                        return;
                     }
                 }
                 
