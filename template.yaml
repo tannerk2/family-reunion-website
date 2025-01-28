@@ -162,7 +162,8 @@ Resources:
               const corsHeaders = {
                 'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With',
                 'Access-Control-Allow-Methods': 'OPTIONS,POST',
-                'Access-Control-Allow-Credentials': 'true'
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
               };
 
               // Only set Access-Control-Allow-Origin if the origin is allowed
@@ -297,7 +298,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH
