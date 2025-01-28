@@ -152,17 +152,23 @@
                 setSubmitStatus({ type: '', message: '' });
                 setDetailedError('');
 
+                // Include the main contact as the first guest
                 const formData = {
                     mainContact,
-                    guests: guests.map(guest => ({
-                        name: guest.name,
-                        age: guest.age
-                    })),
+                    guests: [
+                        {
+                            name: mainContact.name,
+                            age: 'Adult (18+)'  // Assume main contact is adult
+                        },
+                        ...guests
+                    ],
                     totalGuests: guestCount
                 };
 
+                console.log('Submitting data:', formData); // Add this for debugging
+
                 try {
-                    const response = await fetch('https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp', {
+                    const response = await fetch(API_ENDPOINT, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -171,6 +177,7 @@
                     });
 
                     const responseData = await response.json();
+                    console.log('Response:', responseData); // Add this for debugging
 
                     if (!response.ok) {
                         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
@@ -178,7 +185,7 @@
 
                     setSubmitStatus({
                         type: 'success',
-                        message: `Thank you for your RSVP! We've successfully recorded your reservation for you and ${guestCount - 1} ${guestCount === 2 ? 'guest' : 'guests'}. We can't wait to see you at the reunion!`
+                        message: `Thank you for your RSVP! We've successfully recorded your reservation for ${guestCount} ${guestCount === 1 ? 'person' : 'people'}. We can't wait to see you at the reunion!`
                     });
                     setConfirmationId(responseData.confirmationId);
                     
