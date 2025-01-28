@@ -23,6 +23,7 @@ Resources:
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: error.html
+
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -31,13 +32,14 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
+            Principal: '*'
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
             Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+              IpAddress:
+                aws:SourceIp:
+                  - !Sub ${CloudFrontDistribution.DomainName}
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
