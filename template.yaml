@@ -388,7 +388,7 @@ Resources:
               Action:
               - cloudfront:CreateInvalidation
               Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
-  CloudFormationExecutionRole:
+CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -415,6 +415,10 @@ Resources:
                   - codebuild:*
                   - codepipeline:*
                   - codestar-connections:*
+              - Effect: Allow
+                Resource: 'arn:aws:lambda:*:094274105915:layer:AWSSDKv3-Node18:*'
+                Action:
+                  - lambda:GetLayerVersion
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
