@@ -20,9 +20,7 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
+
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -38,6 +36,17 @@ Resources:
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Description: Default Origin Access Control
+        Name: !Ref AWS::StackName
+        OriginAccessControlOriginType: s3
+        SigningProtocol: sigv4
+        SigningBehavior: always
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -49,29 +58,34 @@ Resources:
         ViewerCertificate:
           AcmCertificateArn: !Ref AcmCertificateArn
           SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
         Enabled: true
         DefaultRootObject: index.html
         Origins:
-        - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
-          Id: S3Origin
-          CustomOriginConfig:
-            HTTPPort: 80
-            HTTPSPort: 443
-            OriginProtocolPolicy: http-only
+          - DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
-  CloudFrontOriginAccessControl:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Description: Default Origin Access Control
-        Name: !Ref AWS::StackName
-        OriginAccessControlOriginType: s3
-        SigningProtocol: sigv4
-        SigningBehavior: always
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+          MinTTL: 0
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
   RSVPTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -137,15 +151,18 @@ Resources:
             const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
             exports.handler = async (event) => {
+              // Standard CORS headers for all responses
+              const corsHeaders = {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST'
+              };
+
               // Handle CORS preflight requests
               if (event.httpMethod === 'OPTIONS') {
                 return {
                   statusCode: 200,
-                  headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                  },
+                  headers: corsHeaders,
                   body: ''
                 };
               }
@@ -154,9 +171,7 @@ Resources:
                 if (!event.body) {
                   return {
                     statusCode: 400,
-                    headers: {
-                      'Access-Control-Allow-Origin': '*'
-                    },
+                    headers: corsHeaders,
                     body: JSON.stringify({ message: 'Missing request body' })
                   };
                 }
@@ -169,9 +184,7 @@ Resources:
                 if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
                   return {
                     statusCode: 400,
-                    headers: {
-                      'Access-Control-Allow-Origin': '*'
-                    },
+                    headers: corsHeaders,
                     body: JSON.stringify({ message: 'Missing required fields' })
                   };
                 }
@@ -187,9 +200,7 @@ Resources:
                 if (!isValidGuests) {
                   return {
                     statusCode: 400,
-                    headers: {
-                      'Access-Control-Allow-Origin': '*'
-                    },
+                    headers: corsHeaders,
                     body: JSON.stringify({ message: 'Invalid guest data' })
                   };
                 }
@@ -207,6 +218,7 @@ Resources:
                 };
 
                 // Store in DynamoDB
+                const dynamoDB = new AWS.DynamoDB.DocumentClient();
                 await dynamoDB.put({
                   TableName: process.env.RSVP_TABLE_NAME,
                   Item: item
@@ -214,9 +226,7 @@ Resources:
 
                 return {
                   statusCode: 200,
-                  headers: {
-                    'Access-Control-Allow-Origin': '*'
-                  },
+                  headers: corsHeaders,
                   body: JSON.stringify({
                     message: 'RSVP recorded successfully',
                     confirmationId: item.submissionDate
@@ -226,9 +236,7 @@ Resources:
                 console.error('Error processing RSVP:', error);
                 return {
                   statusCode: 500,
-                  headers: {
-                    'Access-Control-Allow-Origin': '*'
-                  },
+                  headers: corsHeaders,
                   body: JSON.stringify({ message: 'Error processing RSVP' })
                 };
               }
@@ -251,6 +259,7 @@ Resources:
       EndpointConfiguration:
         Types:
         - REGIONAL
+
   ApiResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -261,6 +270,7 @@ Resources:
       PathPart: rsvp
       RestApiId:
         Ref: ApiGateway
+
   ApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -271,10 +281,19 @@ Resources:
         Type: AWS_PROXY
         Uri:
           Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
       ResourceId:
         Ref: ApiResource
       RestApiId:
         Ref: ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
   ApiCorsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -285,11 +304,13 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
               application/json: "{}"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
       ResourceId:
         Ref: ApiResource
       RestApiId:
@@ -300,8 +321,6 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
-          ResponseModels:
-            application/json: "Empty"
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
