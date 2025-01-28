@@ -59,20 +59,18 @@ exports.handler = async (event) => {
 
         const submissionDate = new Date().toISOString();
         
-        const item = {
-            email: mainContact.email,
-            submissionDate: submissionDate,
-            name: mainContact.name,
-            totalGuests: totalGuests,
-            guests: guests.map(guest => ({
-                name: guest.name,
-                age: parseInt(guest.age, 10)
-            }))
-        };
-
         const command = new PutItemCommand({
             TableName: process.env.RSVP_TABLE_NAME,
-            Item: marshall(item)
+            Item: marshall({
+                email: mainContact.email,
+                submissionDate: submissionDate,
+                name: mainContact.name,
+                totalGuests: totalGuests,
+                guests: guests.map(guest => ({
+                    name: guest.name,
+                    age: parseInt(guest.age, 10)
+                }))
+            })
         });
 
         await dynamoDB.send(command);
