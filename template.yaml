@@ -221,7 +221,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com,https://www.wadsworthreunion.com'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH

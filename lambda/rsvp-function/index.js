@@ -7,7 +7,7 @@ exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
     
     const corsHeaders = {
-        'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
+        'Access-Control-Allow-Origin': event.headers.origin,
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'OPTIONS,POST'
     };
