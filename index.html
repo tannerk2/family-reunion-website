@@ -44,6 +44,15 @@
         const API_ENDPOINT = 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp';
 
         const RSVPForm = () => {
+
+            const AGE_GROUPS = [
+                'Adult (18+)',
+                'Teen (13-17)',
+                'Kid (6-12)',
+                'Little (2-5)',
+                'Baby (1 and under)'
+            ];
+
             const [mainContact, setMainContact] = React.useState({
                 name: '',
                 email: ''
@@ -85,15 +94,14 @@
                 }
             };
 
-            const validateAge = (age) => {
-                const parsedAge = parseInt(age);
-                return parsedAge >= 0 && parsedAge <= 120;
+            const validateAgeGroup = (ageGroup) => {
+                return AGE_GROUPS.includes(ageGroup);
             };
 
             const handleGuestChange = (index, field, value) => {
                 if (field === 'age' && value !== '') {
-                    if (!validateAge(value)) {
-                        return; // Don't update if age is invalid
+                    if (!validateAgeGroup(value)) {
+                        return; // Don't update if age group is invalid
                     }
                 }
                 
@@ -294,16 +302,20 @@
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-gray-700 mb-2">Age</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="120"
+                                        <label className="block text-gray-700 mb-2">Age Group</label>
+                                        <select
                                             value={guest.age}
                                             onChange={(e) => handleGuestChange(index, 'age', e.target.value)}
                                             required
                                             className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                                        />
+                                        >
+                                            <option value="">Select age group</option>
+                                            {AGE_GROUPS.map(group => (
+                                                <option key={group} value={group}>
+                                                    {group}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
