@@ -6,10 +6,13 @@ const dynamoDB = new DynamoDBClient({ region: 'us-east-1' }); // Explicitly set 
 exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
     
+    const allowedOrigins = ['https://wadsworthreunion.com', 'https://www.wadsworthreunion.com'];
+    const origin = event.headers?.origin || event.headers?.Origin;
+    
     const corsHeaders = {
-        'Access-Control-Allow-Origin': event.headers.origin,
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-        'Access-Control-Allow-Methods': 'OPTIONS,POST'
+        'Access-Control-Allow-Methods': 'OPTIONS,POST',
+        'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : 'https://wadsworthreunion.com'
     };
 
     if (event.httpMethod === 'OPTIONS') {
