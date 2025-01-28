@@ -11,25 +11,11 @@ const VALID_AGE_GROUPS = [
     'Baby (1 and under)'
 ];
 
-const isValidGuests = guests.every(guest => {
-    console.log('Validating guest:', guest);
-    console.log('Age validation:', {
-        hasName: !!guest.name,
-        isString: typeof guest.age === 'string',
-        isValidGroup: VALID_AGE_GROUPS.includes(guest.age),
-        receivedAge: guest.age
-    });
-    
-    return guest.name && 
-           typeof guest.age === 'string' && 
-           VALID_AGE_GROUPS.includes(guest.age);
-});
-
 exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
     
     const corsHeaders = {
-        'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'OPTIONS,POST'
     };
@@ -52,28 +38,33 @@ exports.handler = async (event) => {
         }
 
         const rsvpData = JSON.parse(event.body);
-        console.log('Received data structure:', JSON.stringify(rsvpData, null, 2));
-        console.log('Guest data types:', rsvpData.guests.map(guest => ({
-            name: typeof guest.name,
-            age: typeof guest.age,
-            actualAge: guest.age
-        })));
-        
-        const { mainContact, guests, totalGuests } = rsvpData;
+        console.log('Parsed request data:', JSON.stringify(rsvpData, null, 2));
 
-        if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
+        // Validate main contact
+        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
-                body: JSON.stringify({ message: 'Missing required fields' })
+                body: JSON.stringify({ message: 'Missing main contact information' })
             };
         }
 
-        const isValidGuests = guests.every(guest => 
-            guest.name && 
-            typeof guest.age === 'string' && 
-            VALID_AGE_GROUPS.includes(guest.age)
-        );
+        // Validate guests array
+        if (!Array.isArray(rsvpData.guests)) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: 'Guests must be an array' })
+            };
+        }
+
+        // Validate each guest
+        const isValidGuests = rsvpData.guests.every(guest => {
+            console.log('Validating guest:', guest);
+            return guest.name && 
+                   typeof guest.age === 'string' && 
+                   VALID_AGE_GROUPS.includes(guest.age);
+        });
 
         if (!isValidGuests) {
             return {
@@ -85,20 +76,15 @@ exports.handler = async (event) => {
 
         const submissionDate = new Date().toISOString();
         
-        console.log('RSVP_TABLE_NAME:', process.env.RSVP_TABLE_NAME);
-        
         const item = {
-            email: mainContact.email,
+            email: rsvpData.mainContact.email,
             submissionDate: submissionDate,
-            name: mainContact.name,
-            totalGuests: totalGuests,
-            guests: guests.map(guest => ({
-                name: guest.name,
-                age: guest.age  // Store the age group string directly
-            }))
+            name: rsvpData.mainContact.name,
+            totalGuests: rsvpData.guests.length,
+            guests: rsvpData.guests
         };
         
-        console.log('Marshalled item:', marshall(item));
+        console.log('Saving item:', JSON.stringify(item, null, 2));
         
         const command = new PutItemCommand({
             TableName: process.env.RSVP_TABLE_NAME,

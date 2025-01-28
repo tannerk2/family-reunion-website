@@ -62,16 +62,15 @@
                 email: ''
             });
             const [guestCount, setGuestCount] = React.useState(1);
-            const [guests, setGuests] = React.useState([{ name: '', age: '' }]);
+            const [additionalGuests, setAdditionalGuests] = React.useState([]);
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
-            const [confirmationId, setConfirmationId] = React.useState('');
             const [detailedError, setDetailedError] = React.useState('');
 
             const resetForm = () => {
                 setMainContact({ name: '', email: '' });
                 setGuestCount(1);
-                setGuests([{ name: '', age: '' }]);
+                ssetAdditionalGuests([]);
                 setDetailedError('');
             };
 
@@ -87,13 +86,20 @@
                 const count = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 20);
                 setGuestCount(count);
                 
-                if (count > guests.length) {
-                    setGuests(prev => [
-                        ...prev,
-                        ...Array(count - prev.length).fill({}).map(() => ({ name: '', age: '' }))
-                    ]);
+                if (count === 1) {
+                    setAdditionalGuests([]);
                 } else {
-                    setGuests(prev => prev.slice(0, count));
+                    const currentGuests = [...additionalGuests];
+                    if (count - 1 > currentGuests.length) {
+                        // Add more guest slots
+                        const newGuests = Array(count - 1 - currentGuests.length)
+                            .fill(null)
+                            .map(() => ({ name: '', age: '' }));
+                        setAdditionalGuests([...currentGuests, ...newGuests]);
+                    } else {
+                        // Remove excess guest slots
+                        setAdditionalGuests(currentGuests.slice(0, count - 1));
+                    }
                 }
             };
 
@@ -124,18 +130,19 @@
                     return false;
                 }
 
-                const allGuestsValid = guests.every(guest => 
-                    guest.name.trim() && 
-                    guest.age !== '' && 
-                    validateAgeGroup(guest.age)
-                );
+                if (guestCount > 1) {  // Only validate additional guests if count > 1
+                    const allGuestsValid = additionalGuests.every(guest =>  // Changed from guests.every
+                        guest.name?.trim() && 
+                        guest.age?.trim()
+                    );
 
-                if (!allGuestsValid) {
-                    setSubmitStatus({
-                        type: 'error',
-                        message: 'Please fill in valid name and age group for all guests'
-                    });
-                    return false;
+                    if (!allGuestsValid) {
+                        setSubmitStatus({
+                            type: 'error',
+                            message: 'Please fill in name and age group for all guests'
+                        });
+                        return false;
+                    }
                 }
 
                 return true;
@@ -160,7 +167,7 @@
                             name: mainContact.name,
                             age: 'Adult (18+)'  // Assume main contact is adult
                         },
-                        ...guests
+                        ...additionalGuests
                     ],
                     totalGuests: guestCount
                 };
@@ -283,10 +290,10 @@
                             />
                         </div>
 
-                        {guests.map((guest, index) => (
+                        {additionalGuests.map((guest, index) => (  // Changed from guests.map
                             <div key={index} className="p-4 bg-orange-50 rounded-lg">
                                 <h3 className="text-lg font-medium text-orange-600 mb-4">
-                                    Guest {index + 1} Details
+                                    Additional Guest {index + 1}  // Changed from Guest {index + 1}
                                 </h3>
                                 <div className="space-y-4">
                                     <div>
