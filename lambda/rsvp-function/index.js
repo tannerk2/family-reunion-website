@@ -3,13 +3,7 @@ const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 
-const VALID_AGE_GROUPS = [
-    'Adult (18+)',
-    'Teen (13-17)',
-    'Kid (6-12)',
-    'Little (2-5)',
-    'Baby (1 and under)'
-];
+const VALID_AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
 
 exports.handler = async (event) => {
     console.log('Environment variables:', {

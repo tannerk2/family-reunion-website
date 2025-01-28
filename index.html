@@ -44,13 +44,15 @@
         const API_ENDPOINT = 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp';
 
         const RSVPForm = () => {
-            const AGE_GROUPS = [
-                'Adult (18+)',
-                'Teen (13-17)',
-                'Kid (6-12)',
-                'Little (2-5)',
-                'Baby (1 and under)'
-            ];
+            const AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
+
+            const AGE_GROUP_LABELS = {
+                'A': 'Adult (18+)',
+                'T': 'Teen (13-17)',
+                'K': 'Kid (6-12)',
+                'L': 'Little (2-5)',
+                'B': 'Baby (1 and under)'
+            };
 
             // Add the missing validateAgeGroup function
             const validateAgeGroup = (ageGroup) => {
@@ -173,7 +175,7 @@
 
                 // Create the guests array including the main contact
                 const allGuests = [
-                    { name: mainContact.name.trim(), age: 'Adult (18+)' },
+                    { name: mainContact.name.trim(), age: 'A' }, // Changed from 'Adult (18+)'
                     ...additionalGuests.map(guest => ({
                         name: guest.name.trim(),
                         age: guest.age
@@ -350,9 +352,9 @@
                                             className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
                                         >
                                             <option value="">Select age group</option>
-                                            {AGE_GROUPS.map(group => (
-                                                <option key={group} value={group}>
-                                                    {group}
+                                            {AGE_GROUPS.map(code => (
+                                                <option key={code} value={code}>
+                                                    {AGE_GROUP_LABELS[code]}
                                                 </option>
                                             ))}
                                         </select>
