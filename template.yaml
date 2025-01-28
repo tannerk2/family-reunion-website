@@ -312,7 +312,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: tru
+            method.response.header.Access-Control-Allow-Origin: true
 
   ApiMethod:
     Type: AWS::ApiGateway::Method
