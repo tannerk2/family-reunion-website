@@ -3,7 +3,7 @@ const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 
-const VALID_AGE_GROUPS = [
+const AGE_GROUPS = [
     'Adult (18+)',
     'Teen (13-17)',
     'Kid (6-12)',

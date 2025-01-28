@@ -172,7 +172,11 @@
                     totalGuests: guestCount
                 };
 
-                console.log('Submitting data:', formData); // Add this for debugging
+                // Add detailed logging
+                console.log('Form Data being sent:', JSON.stringify(formData, null, 2));
+                console.log('Additional Guests:', additionalGuests);
+                console.log('Guest Count:', guestCount);
+                console.log('All Guests:', allGuests);
 
                 try {
                     const response = await fetch(API_ENDPOINT, {
