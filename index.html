@@ -159,27 +159,23 @@
                 setSubmitStatus({ type: '', message: '' });
                 setDetailedError('');
 
-                // Include the main contact as the first guest
                 const formData = {
                     mainContact,
                     guests: [
-                        {
-                            name: mainContact.name,
-                            age: 'Adult (18+)'  // Assume main contact is adult
-                        },
+                        { name: mainContact.name, age: 'Adult (18+)' },
                         ...additionalGuests
                     ],
                     totalGuests: guestCount
                 };
 
-                // Add detailed logging
+                // Updated logging
                 console.log('Form Data being sent:', JSON.stringify(formData, null, 2));
                 console.log('Additional Guests:', additionalGuests);
                 console.log('Guest Count:', guestCount);
-                console.log('All Guests:', allGuests);
+                console.log('All Guests:', formData.guests);  // Changed from allGuests
 
                 try {
-                    const response = await fetch(API_ENDPOINT, {
+                    const response = await fetch('https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -188,7 +184,7 @@
                     });
 
                     const responseData = await response.json();
-                    console.log('Response:', responseData); // Add this for debugging
+                    console.log('Response:', responseData);
 
                     if (!response.ok) {
                         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
