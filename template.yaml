@@ -279,7 +279,7 @@ Resources:
       RestApiId:
         Ref: ApiGateway
 
-ApiCorsMethod:
+  ApiCorsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
