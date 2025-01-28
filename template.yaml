@@ -20,9 +20,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
 
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -40,6 +37,16 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Description: Default Origin Access Control
+        Name: !Ref AWS::StackName
+        OriginAccessControlOriginType: s3
+        SigningProtocol: sigv4
+        SigningBehavior: always
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -55,12 +62,11 @@ Resources:
         Enabled: true
         DefaultRootObject: index.html
         Origins:
-          - DomainName: !Select [1, !Split ["//", !GetAtt WebsiteBucket.WebsiteURL]]
+          - DomainName: !GetAtt WebsiteBucket.RegionalDomainName
             Id: S3Origin
-            CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: http-only
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -80,15 +86,6 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
-  CloudFrontOriginAccessControl:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Description: Default Origin Access Control
-        Name: !Ref AWS::StackName
-        OriginAccessControlOriginType: s3
-        SigningProtocol: sigv4
-        SigningBehavior: always
   RSVPTable:
       Type: AWS::DynamoDB::Table
       Properties:
