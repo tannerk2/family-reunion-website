@@ -127,7 +127,7 @@
                 const allGuestsValid = guests.every(guest => 
                     guest.name.trim() && 
                     guest.age !== '' && 
-                    validateAge(guest.age)
+                    validateAgeGroup(guest.ageGroup)
                 );
 
                 if (!allGuestsValid) {
