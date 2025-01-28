@@ -124,7 +124,7 @@ Resources:
                   Fn::GetAtt:
                     - RSVPTable
                     - Arn
-RSVPFunction:
+  RSVPFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName:
