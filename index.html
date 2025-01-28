@@ -157,22 +157,14 @@
                 try {
                     console.log('Submitting RSVP:', formData);
                     
-                    // Add error handling for network timeout
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
+                    // Simpler fetch configuration
                     const response = await fetch(API_ENDPOINT, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(formData),
-                        signal: controller.signal,
-                        mode: 'cors'
+                        body: JSON.stringify(formData)
                     });
-
-                    clearTimeout(timeoutId);
 
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({}));
@@ -190,24 +182,15 @@
                     resetForm();
                 } catch (error) {
                     console.error('Submission error:', error);
-                    let errorMessage = 'Error submitting RSVP. ';
-                    
-                    if (error.name === 'AbortError') {
-                        errorMessage += 'The request timed out. ';
-                    }
-                    
-                    errorMessage += 'Please try again later.';
-                    
                     setDetailedError(error.toString());
                     setSubmitStatus({
                         type: 'error',
-                        message: errorMessage
+                        message: 'Error submitting RSVP. Please try again later.'
                     });
                 } finally {
                     setIsSubmitting(false);
                 }
             };
-
             return (
                 <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
                     <h2 className="text-3xl font-bold text-orange-600 mb-6 text-center">RSVP by May 1st</h2>
