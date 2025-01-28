@@ -127,20 +127,15 @@ Resources:
   RSVPFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName:
-        Fn::Sub: ${DomainName}-rsvp
-      Handler: index.handler
-      Role:
-        Fn::GetAtt:
-          - LambdaExecutionRole
-          - Arn
+      FunctionName: ...
+      Handler: ...
+      Role: ...
       Runtime: nodejs18.x
       Timeout: 30
       MemorySize: 128
       Environment:
         Variables:
-          RSVP_TABLE_NAME:
-            Fn::Sub: ${DomainName}-rsvp
+          RSVP_TABLE_NAME: ...
       Tags:
         - Key: Purpose
           Value: RSVP Processing
