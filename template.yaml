@@ -340,13 +340,27 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 400
+            SelectionPattern: ".*[Bad Request].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 500
+            SelectionPattern: ".*[Error].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
       ResourceId:
         Ref: ApiResource
       RestApiId:
         Ref: ApiGateway
       MethodResponses:
         - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
 

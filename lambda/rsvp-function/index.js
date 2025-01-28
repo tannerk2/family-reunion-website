@@ -1,5 +1,7 @@
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+
 const { marshall } = require('@aws-sdk/util-dynamodb');
+
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 
@@ -16,6 +18,12 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'OPTIONS,POST'
     };
+    
+    const createResponse = (statusCode, body) => ({
+        statusCode,
+        headers: corsHeaders,
+        body: JSON.stringify(body)
+    });
 
     try {
         const rsvpData = JSON.parse(event.body);
@@ -64,17 +72,13 @@ exports.handler = async (event) => {
 
         // Check guest count match
         if (rsvpData.totalGuests !== rsvpData.guests.length) {
-            return {
-                statusCode: 400,
-                headers: corsHeaders,
-                body: JSON.stringify({
-                    message: 'Guest count mismatch',
-                    detail: {
-                        expected: rsvpData.totalGuests,
-                        actual: rsvpData.guests.length
-                    }
-                })
-            };
+            return createResponse(400, {
+                message: 'Guest count mismatch',
+                detail: {
+                    expected: rsvpData.totalGuests,
+                    actual: rsvpData.guests.length
+                }
+            });
         }
 
         console.log('Validation check:', {
@@ -120,24 +124,20 @@ exports.handler = async (event) => {
         });
 
         if (invalidGuests.length > 0) {
-            return {
-                statusCode: 400,
-                headers: corsHeaders,
-                body: JSON.stringify({
-                    message: 'Invalid guest data',
-                    detail: {
-                        invalidGuests,
-                        VALID_AGE_GROUPS,
-                        validationResults: rsvpData.guests.map(guest => ({
-                            name: guest.name,
-                            age: guest.age,
-                            nameValid: !!guest.name,
-                            ageValid: !!guest.age,
-                            ageInList: VALID_AGE_GROUPS.includes(guest.age)
-                        }))
-                    }
-                })
-            };
+            return createResponse(400, {
+                message: 'Invalid guest data',
+                detail: {
+                    invalidGuests,
+                    VALID_AGE_GROUPS,
+                    validationResults: rsvpData.guests.map(guest => ({
+                        name: guest.name,
+                        age: guest.age,
+                        nameValid: !!guest.name,
+                        ageValid: !!guest.age,
+                        ageInList: VALID_AGE_GROUPS.includes(guest.age)
+                    }))
+                }
+            });
         }
 
         // Proceed with saving if everything is valid
@@ -160,14 +160,10 @@ exports.handler = async (event) => {
 
         await dynamoDB.send(command);
 
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: JSON.stringify({
-                message: 'RSVP recorded successfully',
-                confirmationId: submissionDate
-            })
-        };
+        return createResponse(200, {
+            message: 'RSVP recorded successfully',
+            confirmationId: submissionDate
+        });
 
     } catch (error) {
         console.error('Error details:', {
@@ -176,14 +172,10 @@ exports.handler = async (event) => {
             type: error.constructor.name
         });
         
-        return {
-            statusCode: 500,
-            headers: corsHeaders,
-            body: JSON.stringify({
-                message: 'Error processing RSVP',
-                error: error.message,
-                detail: error.stack
-            })
-        };
+        return createResponse(500, {
+            message: 'Error processing RSVP',
+            error: error.message,
+            detail: error.stack
+        });
     }
 };
