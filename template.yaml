@@ -80,7 +80,6 @@ Resources:
       DistributionConfig:
         Aliases:
           - wadsworthreunion.com
-          - '*.wadsworthreunion.com'
           - www.wadsworthreunion.com
         ViewerCertificate:
           AcmCertificateArn: !Ref AcmCertificateArn
@@ -88,13 +87,20 @@ Resources:
           MinimumProtocolVersion: TLSv1.2_2021
         Enabled: true
         DefaultRootObject: index.html
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+          - ErrorCode: 404
+            ResponsePagePath: /index.html
+            ResponseCode: 200
         Origins:
           - DomainName: !GetAtt WebsiteBucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
               OriginAccessIdentity: ''
             OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
-        DefaultCacheBehavior:
+        DefaultCacheBehavior:  # For non-www domain
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           AllowedMethods:
@@ -113,6 +119,80 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
+        # Add new CacheBehavior for www subdomain
+        CacheBehaviors:
+          - PathPattern: '*'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            Compress: true
+            DefaultTTL: 86400
+            MaxTTL: 31536000
+            MinTTL: 0
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            LambdaFunctionAssociations:
+              - EventType: viewer-request
+                LambdaFunctionARN: !Ref RedirectFunction
+
+  # Add a Lambda@Edge function for the redirect
+  RedirectFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            const request = event.Records[0].cf.request;
+            const headers = request.headers;
+            const host = headers.host[0].value;
+            
+            if (host.startsWith('www.')) {
+              const response = {
+                status: '301',
+                statusDescription: 'Moved Permanently',
+                headers: {
+                  'location': [{
+                    key: 'Location',
+                    value: `https://wadsworthreunion.com${request.uri}`
+                  }],
+                  'cache-control': [{
+                    key: 'Cache-Control',
+                    value: 'max-age=3600'
+                  }]
+                }
+              };
+              return response;
+            }
+            return request;
+          }
+      Handler: index.handler
+      Role: !GetAtt LambdaEdgeRole.Arn
+      Runtime: nodejs18.x
+
+  # Add IAM role for Lambda@Edge
+  LambdaEdgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
   RSVPTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -221,7 +301,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com,https://www.wadsworthreunion.com'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH
