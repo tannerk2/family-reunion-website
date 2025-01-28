@@ -431,6 +431,14 @@ Resources:
                 Action:
                   - cloudfront:CreateInvalidation
                 Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+              - Effect: Allow
+                Action:
+                  - apigateway:POST
+                  - apigateway:GET
+                Resource: 
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/*'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/deployments'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/*'
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
