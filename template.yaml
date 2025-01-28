@@ -10,19 +10,19 @@ Parameters:
     Description: ARN for AWS Certificate
 Resources:
   WebsiteBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName:
-          Ref: DomainName
-        AccessControl: Private
-        PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
-          BlockPublicPolicy: false
-          IgnorePublicAcls: false
-          RestrictPublicBuckets: false
-        WebsiteConfiguration:
-          IndexDocument: index.html
-          ErrorDocument: error.html
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: DomainName
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -31,41 +31,38 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: '*'
+            Principal:
+              Service: cloudfront.amazonaws.com
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
   CloudFrontDistribution:
-      Type: AWS::CloudFront::Distribution
-      Properties:
-        DistributionConfig:
-          Aliases:
-            - wadsworthreunion.com
-            - '*.wadsworthreunion.com'
-            - www.wadsworthreunion.com
-          ViewerCertificate:
-            AcmCertificateArn: !Ref AcmCertificateArn
-            SslSupportMethod: sni-only
-          Enabled: true
-          DefaultRootObject: index.html
-          Origins:
-          - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
-            Id: S3Origin
-            CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: http-only
-          DefaultCacheBehavior:
-            TargetOriginId: S3Origin
-            ViewerProtocolPolicy: redirect-to-https
-            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-            OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
-          CustomErrorResponses:
-            - ErrorCode: 403
-              ResponseCode: 200
-              ResponsePagePath: /index.html
-            - ErrorCode: 404
-              ResponseCode: 200
-              ResponsePagePath: /index.html
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - wadsworthreunion.com
+          - '*.wadsworthreunion.com'
+          - www.wadsworthreunion.com
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+        - DomainName: !Sub ${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
+          Id: S3Origin
+          CustomOriginConfig:
+            HTTPPort: 80
+            HTTPSPort: 443
+            OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -125,144 +122,117 @@ Resources:
                     - RSVPTable
                     - Arn
   RSVPFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${DomainName}-rsvp
-      Handler: index.handler
-      Role:
-        Fn::GetAtt:
-          - LambdaExecutionRole
-          - Arn
-      Runtime: nodejs18.x
-      Timeout: 30
-      MemorySize: 128
-      Environment:
-        Variables:
-          RSVP_TABLE_NAME:
-            Fn::Sub: ${DomainName}-rsvp
-      Tags:
-        - Key: Purpose
-          Value: RSVP Processing
-      Code:
-        ZipFile: |
-          const AWS = require('aws-sdk');
-          const dynamoDB = new AWS.DynamoDB.DocumentClient();
+      Type: AWS::Lambda::Function
+      Properties:
+        FunctionName:
+          Fn::Sub: ${DomainName}-rsvp
+        Handler: index.handler
+        Role:
+          Fn::GetAtt:
+            - LambdaExecutionRole
+            - Arn
+        Code:
+          ZipFile: |
+            const AWS = require('aws-sdk');
+            const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
-          exports.handler = async (event) => {
-              console.log('Event received:', JSON.stringify(event, null, 2));
-              
-              // Set default CORS headers
-              const corsHeaders = {
-                  'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Methods': 'OPTIONS,POST',
-                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                  'Content-Type': 'application/json'
-              };
-
-              // Handle OPTIONS request
+            exports.handler = async (event) => {
+              // Handle CORS preflight requests
               if (event.httpMethod === 'OPTIONS') {
-                  return {
-                      statusCode: 200,
-                      headers: corsHeaders,
-                      body: ''
-                  };
+                return {
+                  statusCode: 200,
+                  headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                  },
+                  body: ''
+                };
               }
 
               try {
-                  // Validate request
-                  if (!event.body) {
-                      console.log('Missing request body');
-                      return {
-                          statusCode: 400,
-                          headers: corsHeaders,
-                          body: JSON.stringify({ message: 'Missing request body' })
-                      };
-                  }
-
-                  // Parse and validate the request body
-                  const rsvpData = JSON.parse(event.body);
-                  console.log('Parsed RSVP data:', rsvpData);
-
-                  const { mainContact, guests, totalGuests } = rsvpData;
-
-                  // Validation
-                  if (!mainContact?.email || !mainContact?.name || !guests?.length) {
-                      console.log('Invalid request data:', { mainContact, guests, totalGuests });
-                      return {
-                          statusCode: 400,
-                          headers: corsHeaders,
-                          body: JSON.stringify({ 
-                              message: 'Missing required fields',
-                              details: { mainContact, guestCount: guests?.length }
-                          })
-                      };
-                  }
-
-                  // Validate guest data
-                  const isValidGuests = guests.every(guest => 
-                      guest.name && 
-                      typeof guest.age === 'string' && 
-                      parseInt(guest.age) >= 0 && 
-                      parseInt(guest.age) <= 120
-                  );
-
-                  if (!isValidGuests) {
-                      console.log('Invalid guest data:', guests);
-                      return {
-                          statusCode: 400,
-                          headers: corsHeaders,
-                          body: JSON.stringify({ 
-                              message: 'Invalid guest data',
-                              details: guests
-                          })
-                      };
-                  }
-
-                  // Prepare DynamoDB item
-                  const item = {
-                      email: mainContact.email,
-                      submissionDate: new Date().toISOString(),
-                      name: mainContact.name,
-                      totalGuests,
-                      guests: guests.map(guest => ({
-                          name: guest.name,
-                          age: parseInt(guest.age, 10)
-                      }))
-                  };
-
-                  console.log('Attempting to save item:', item);
-                  console.log('Using table name:', process.env.RSVP_TABLE_NAME);
-
-                  // Store in DynamoDB
-                  await dynamoDB.put({
-                      TableName: process.env.RSVP_TABLE_NAME,
-                      Item: item
-                  }).promise();
-
-                  console.log('Successfully saved RSVP');
-
+                if (!event.body) {
                   return {
-                      statusCode: 200,
-                      headers: corsHeaders,
-                      body: JSON.stringify({
-                          message: 'RSVP recorded successfully',
-                          confirmationId: item.submissionDate
-                      })
+                    statusCode: 400,
+                    headers: {
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ message: 'Missing request body' })
                   };
+                }
+
+                // Parse the incoming request body
+                const rsvpData = JSON.parse(event.body);
+                const { mainContact, guests, totalGuests } = rsvpData;
+
+                // Basic validation
+                if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
+                  return {
+                    statusCode: 400,
+                    headers: {
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ message: 'Missing required fields' })
+                  };
+                }
+
+                // Validate guest data
+                const isValidGuests = guests.every(guest => 
+                  guest.name && 
+                  typeof guest.age === 'string' && 
+                  parseInt(guest.age) >= 0 && 
+                  parseInt(guest.age) <= 120
+                );
+
+                if (!isValidGuests) {
+                  return {
+                    statusCode: 400,
+                    headers: {
+                      'Access-Control-Allow-Origin': '*'
+                    },
+                    body: JSON.stringify({ message: 'Invalid guest data' })
+                  };
+                }
+
+                // Prepare DynamoDB item
+                const item = {
+                  email: mainContact.email,
+                  submissionDate: new Date().toISOString(),
+                  name: mainContact.name,
+                  totalGuests,
+                  guests: guests.map(guest => ({
+                    name: guest.name,
+                    age: parseInt(guest.age, 10)
+                  }))
+                };
+
+                // Store in DynamoDB
+                await dynamoDB.put({
+                  TableName: process.env.RSVP_TABLE_NAME,
+                  Item: item
+                }).promise();
+
+                return {
+                  statusCode: 200,
+                  headers: {
+                    'Access-Control-Allow-Origin': '*'
+                  },
+                  body: JSON.stringify({
+                    message: 'RSVP recorded successfully',
+                    confirmationId: item.submissionDate
+                  })
+                };
               } catch (error) {
-                  console.error('Error processing RSVP:', error);
-                  return {
-                      statusCode: 500,
-                      headers: corsHeaders,
-                      body: JSON.stringify({ 
-                          message: 'Error processing RSVP',
-                          error: error.message,
-                          stackTrace: error.stack
-                      })
-                  };
+                console.error('Error processing RSVP:', error);
+                return {
+                  statusCode: 500,
+                  headers: {
+                    'Access-Control-Allow-Origin': '*'
+                  },
+                  body: JSON.stringify({ message: 'Error processing RSVP' })
+                };
               }
-          };
+            };
         Runtime: nodejs18.x
         Timeout: 30
         MemorySize: 128
@@ -276,21 +246,21 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub ${DomainName}-api
+      Name:
+        Fn::Sub: ${DomainName}-api
       EndpointConfiguration:
         Types:
-          - REGIONAL
+        - REGIONAL
   ApiResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       ParentId:
         Fn::GetAtt:
-          - ApiGateway
-          - RootResourceId
+        - ApiGateway
+        - RootResourceId
       PathPart: rsvp
       RestApiId:
         Ref: ApiGateway
-
   ApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -305,13 +275,6 @@ Resources:
         Ref: ApiResource
       RestApiId:
         Ref: ApiGateway
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Headers: true
-
   ApiCorsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -322,13 +285,11 @@ Resources:
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
               application/json: "{}"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
       ResourceId:
         Ref: ApiResource
       RestApiId:
@@ -341,17 +302,13 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
           ResponseModels:
             application/json: "Empty"
-
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - ApiMethod
-      - ApiCorsMethod
+    - ApiMethod
     Properties:
       RestApiId:
         Ref: ApiGateway
-      Description: Production deployment
-      StageName: prod
   ApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
@@ -375,44 +332,40 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
   CodeBuildServiceRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: CodeBuildBasePolicy
+        PolicyDocument:
           Version: '2012-10-17'
           Statement:
           - Effect: Allow
-            Principal:
-              Service: codebuild.amazonaws.com
-            Action: sts:AssumeRole
-        Policies:
-        - PolicyName: CodeBuildBasePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-            - Effect: Allow
-              Resource: '*'
-              Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            - Effect: Allow
-              Resource:
-              - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}
-              - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}/*
-              - Fn::Sub: arn:aws:s3:::${DomainName}
-              - Fn::Sub: arn:aws:s3:::${DomainName}/*
-              Action:
-              - s3:GetObject
-              - s3:GetObjectVersion
-              - s3:PutObject
-              - s3:ListBucket
-              - s3:DeleteObject
-              - s3:GetBucketLocation
-              - s3:ListBucket
-            - Effect: Allow
-              Action:
-              - cloudfront:CreateInvalidation
-              Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+            Resource: '*'
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          - Effect: Allow
+            Resource:
+            - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}
+            - Fn::Sub: arn:aws:s3:::${PipelineArtifactsBucket}/*
+            - Fn::Sub: arn:aws:s3:::${DomainName}
+            - Fn::Sub: arn:aws:s3:::${DomainName}/*
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            - s3:PutObject
+            - s3:ListBucket
+            - s3:DeleteObject
+            - s3:GetBucketLocation
+            - s3:ListBucket
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -496,24 +449,27 @@ Resources:
             Action:
             - codestar-connections:UseConnection
   CodeBuildProject:
-      Type: AWS::CodeBuild::Project
-      Properties:
-        Name:
-          Fn::Sub: ${AWS::StackName}-build
-        ServiceRole:
-          Fn::GetAtt:
-          - CodeBuildServiceRole
-          - Arn
-        Artifacts:
-          Type: CODEPIPELINE
-        Environment:
-          Type: LINUX_CONTAINER
-          ComputeType: BUILD_GENERAL1_SMALL
-          Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
-        Source:
-          Type: CODEPIPELINE
-        Cache:
-          Type: NO_CACHE
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-build
+      ServiceRole:
+        Fn::GetAtt:
+        - CodeBuildServiceRole
+        - Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "version: 0.2\nphases:\n  build:\n    commands:\n      - aws s3\
+          \ sync . s3://${WEBSITE_BUCKET}/ --exclude \".git/*\" --exclude \"buildspec.yml\"\
+          \nartifacts:\n  files:\n    - '**/*'\n"
+      Cache:
+        Type: NO_CACHE
   GitHubConnection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
@@ -521,73 +477,73 @@ Resources:
         Fn::Sub: ${AWS::StackName}-github
       ProviderType: GitHub
   Pipeline:
-      Type: AWS::CodePipeline::Pipeline
-      Properties:
-        RoleArn:
-          Fn::GetAtt:
-          - CodePipelineServiceRole
-          - Arn
-        ArtifactStore:
-          Type: S3
-          Location:
-            Ref: PipelineArtifactsBucket
-        Stages:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn:
+        Fn::GetAtt:
+        - CodePipelineServiceRole
+        - Arn
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: PipelineArtifactsBucket
+      Stages:
+      - Name: Source
+        Actions:
         - Name: Source
-          Actions:
-          - Name: Source
-            ActionTypeId:
-              Category: Source
-              Owner: AWS
-              Version: 1
-              Provider: CodeStarSourceConnection
-            Configuration:
-              ConnectionArn:
-                Ref: GitHubConnection
-              FullRepositoryId: tannerk2/family-reunion-website
-              BranchName: main
-            OutputArtifacts:
-            - Name: SourceCode
-            RunOrder: 1
-        - Name: UpdateInfrastructure
-          Actions:
-          - Name: UpdateCloudFormation
-            ActionTypeId:
-              Category: Deploy
-              Owner: AWS
-              Version: 1
-              Provider: CloudFormation
-            Configuration:
-              ActionMode: CREATE_UPDATE
-              Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-              RoleArn: !GetAtt CloudFormationExecutionRole.Arn
-              StackName: !Ref AWS::StackName
-              TemplatePath: SourceCode::template.yaml
-              ParameterOverrides: !Sub |
-                {
-                  "DomainName": "${DomainName}",
-                  "AcmCertificateArn": "${AcmCertificateArn}"
-                }
-            InputArtifacts:
-            - Name: SourceCode
-            RunOrder: 1
-        - Name: Deploy
-          Actions:
-          - Name: DeployWebsite
-            ActionTypeId:
-              Category: Build
-              Owner: AWS
-              Version: 1
-              Provider: CodeBuild
-            Configuration:
-              ProjectName:
-                Ref: CodeBuildProject
-              EnvironmentVariables:
-                Fn::Sub: '[{"name":"WEBSITE_BUCKET","value":"${DomainName}"},{"name":"CLOUDFRONT_ID","value":"${CloudFrontDistribution}"}]'
-            InputArtifacts:
-            - Name: SourceCode
-            OutputArtifacts:
-            - Name: BuildOutput
-            RunOrder: 1
+          ActionTypeId:
+            Category: Source
+            Owner: AWS
+            Version: 1
+            Provider: CodeStarSourceConnection
+          Configuration:
+            ConnectionArn:
+              Ref: GitHubConnection
+            FullRepositoryId: tannerk2/family-reunion-website
+            BranchName: main
+          OutputArtifacts:
+          - Name: SourceCode
+          RunOrder: 1
+      - Name: UpdateInfrastructure
+        Actions:
+        - Name: UpdateCloudFormation
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Version: 1
+            Provider: CloudFormation
+          Configuration:
+            ActionMode: CREATE_UPDATE
+            Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+            RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+            StackName: !Ref AWS::StackName
+            TemplatePath: SourceCode::template.yaml
+            ParameterOverrides: !Sub |
+              {
+                "DomainName": "${DomainName}",
+                "AcmCertificateArn": "${AcmCertificateArn}"
+              }
+          InputArtifacts:
+          - Name: SourceCode
+          RunOrder: 1
+      - Name: Deploy
+        Actions:
+        - Name: DeployWebsite
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: 1
+            Provider: CodeBuild
+          Configuration:
+            ProjectName:
+              Ref: CodeBuildProject
+            EnvironmentVariables:
+              Fn::Sub: '[{"name":"WEBSITE_BUCKET","value":"${DomainName}"}]'
+          InputArtifacts:
+          - Name: SourceCode
+          OutputArtifacts:
+          - Name: BuildOutput
+          RunOrder: 1
 Outputs:
   WebsiteURL:
     Description: CloudFront Distribution Domain Name
