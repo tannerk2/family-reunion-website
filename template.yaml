@@ -340,7 +340,6 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   ApiMethod:
-  ApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
@@ -526,9 +525,9 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2023-x86_64-standard:1.0
+        Type: LINUX__LAMBDA_CONTAINER
+        ComputeType: BUILD_LAMBDA_1GB
+        Image: aws/codebuild/amazonlinux-x86_64-lambda-standard:nodejs18
         EnvironmentVariables:
           - Name: WEBSITE_BUCKET
             Value: !Ref DomainName
@@ -536,6 +535,8 @@ Resources:
             Value: !Ref CloudFrontDistribution
           - Name: LAMBDA_CODE_BUCKET
             Value: !Ref LambdaCodeBucket
+          - Name: API_ID
+            Value: !Ref ApiGateway
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -559,6 +560,7 @@ Resources:
                 # Build and deploy website
                 - aws s3 sync . s3://${WEBSITE_BUCKET} --exclude "*" --include "*.html" --include "*.css" --include "*.js" --include "*.jpg" --include "*.png" --include "*.ico"
                 - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_ID} --paths "/*"
+                - aws apigateway create-deployment --rest-api-id ${API_ID} --stage-name prod
       Cache:
         Type: NO_CACHE
   GitHubConnection:
