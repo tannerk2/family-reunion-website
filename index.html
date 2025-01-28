@@ -59,9 +59,8 @@
                 setMainContact({ name: '', email: '' });
                 setGuestCount(1);
                 setGuests([{ name: '', age: '' }]);
-                setSubmitStatus({ type: '', message: '' });
-                setConfirmationId('');
                 setDetailedError('');
+                // Don't reset submitStatus or confirmationId
             };
 
             const handleMainContactChange = (e) => {
@@ -174,7 +173,15 @@
                         message: `Thank you for your RSVP! We've successfully recorded your reservation for ${guestCount} ${guestCount === 1 ? 'guest' : 'guests'}. We can't wait to see you at the reunion!`
                     });
                     setConfirmationId(data.confirmationId);
-                    resetForm();
+                    
+                    // Delay the form reset to allow the success message to be seen
+                    setTimeout(() => {
+                        setMainContact({ name: '', email: '' });
+                        setGuestCount(1);
+                        setGuests([{ name: '', age: '' }]);
+                        // Don't reset submitStatus or confirmationId here
+                    }, 5000); // Reset form after 5 seconds
+
                 } catch (error) {
                     console.error('Submission error:', error);
                     setDetailedError(error.toString());
@@ -211,6 +218,16 @@
                                     <p className="mt-4 text-sm text-green-600">
                                         If you need to make any changes to your RSVP, please contact Kaitlyn Tanner.
                                     </p>
+                                    <button
+                                        onClick={() => {
+                                            resetForm();
+                                            setSubmitStatus({ type: '', message: '' });
+                                            setConfirmationId('');
+                                        }}
+                                        className="mt-6 bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                                    >
+                                        Submit Another RSVP
+                                    </button>
                                 </div>
                             )}
                             {submitStatus.type === 'error' && (
