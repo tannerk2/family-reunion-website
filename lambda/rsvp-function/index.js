@@ -74,10 +74,41 @@ exports.handler = async (event) => {
             includes: rsvpData.guests.map(g => VALID_AGE_GROUPS.includes(g.age))
         });
 
+        console.log('Pre-validation details:', {
+            VALID_AGE_GROUPS,
+            guestData: rsvpData.guests.map(g => ({
+                name: g.name,
+                age: g.age,
+                nameValid: !!g.name,
+                ageValid: !!g.age,
+                ageInList: VALID_AGE_GROUPS.includes(g.age),
+                validationResult: !g.name || !g.age || !VALID_AGE_GROUPS.includes(g.age)
+            }))
+        });
+
         // Check guest data validity
-        const invalidGuests = rsvpData.guests.filter(guest => 
-            !guest.name || !guest.age || !VALID_AGE_GROUPS.includes(guest.age)
-        );
+        const invalidGuests = rsvpData.guests.filter(guest => {
+            const nameInvalid = !guest.name;
+            const ageInvalid = !guest.age;
+            const ageNotInList = !VALID_AGE_GROUPS.includes(guest.age);
+            const isInvalid = nameInvalid || ageInvalid || ageNotInList;
+            
+            console.log('Guest validation:', {
+                name: guest.name,
+                age: guest.age,
+                nameInvalid,
+                ageInvalid,
+                ageNotInList,
+                isInvalid
+            });
+            
+            return isInvalid;
+        });
+
+        console.log('Invalid guests result:', {
+            count: invalidGuests.length,
+            guests: invalidGuests
+        });
 
         if (invalidGuests.length > 0) {
             return {
