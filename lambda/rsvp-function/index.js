@@ -21,6 +21,15 @@ exports.handler = async (event) => {
         const rsvpData = JSON.parse(event.body);
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
         
+        console.log('Debug validation:', {
+            VALID_AGE_GROUPS,
+            receivedGuests: rsvpData.guests,
+            checkFirstGuest: VALID_AGE_GROUPS.includes(rsvpData.guests[0].age),
+            checkSecondGuest: VALID_AGE_GROUPS.includes(rsvpData.guests[1].age),
+            arrayType: typeof VALID_AGE_GROUPS,
+            isArray: Array.isArray(VALID_AGE_GROUPS)
+        });
+
         // Log the actual validation checks
         console.log('Validation checks:', {
             mainContactValid: !!(rsvpData.mainContact?.email && rsvpData.mainContact?.name),
