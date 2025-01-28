@@ -3,7 +3,6 @@ const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 
-// Changed variable name to match usage in validation
 const VALID_AGE_GROUPS = [
     'Adult (18+)',
     'Teen (13-17)',
@@ -21,70 +20,91 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Methods': 'OPTIONS,POST'
     };
 
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: ''
-        };
-    }
-
     try {
         if (!event.body) {
+            console.log('Missing request body');
             return {
                 statusCode: 400,
                 headers: corsHeaders,
-                body: JSON.stringify({ message: 'Missing request body' })
+                body: JSON.stringify({ 
+                    message: 'Missing request body',
+                    detail: 'The request body is empty or undefined'
+                })
             };
         }
 
         const rsvpData = JSON.parse(event.body);
-        console.log('Parsed request data:', JSON.stringify(rsvpData, null, 2));
+        console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
 
-        // Validate main contact
-        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
+        // Validate main contact with detailed logging
+        const mainContactValidation = {
+            hasEmail: !!rsvpData.mainContact?.email,
+            hasName: !!rsvpData.mainContact?.name,
+            isValid: !!(rsvpData.mainContact?.email && rsvpData.mainContact?.name)
+        };
+        
+        console.log('Main contact validation:', mainContactValidation);
+
+        if (!mainContactValidation.isValid) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
-                body: JSON.stringify({ message: 'Missing main contact information' })
+                body: JSON.stringify({ 
+                    message: 'Missing main contact information',
+                    detail: mainContactValidation
+                })
             };
         }
 
         // Validate guests array
         if (!Array.isArray(rsvpData.guests)) {
+            console.log('Invalid guests format:', typeof rsvpData.guests);
             return {
                 statusCode: 400,
                 headers: corsHeaders,
-                body: JSON.stringify({ message: 'Guests must be an array' })
+                body: JSON.stringify({ 
+                    message: 'Guests must be an array',
+                    detail: `Received type: ${typeof rsvpData.guests}`
+                })
             };
         }
 
-        // Add detailed validation logging
-        console.log('Valid age groups:', VALID_AGE_GROUPS);
-        
-        // Validate each guest with detailed logging
-        const isValidGuests = rsvpData.guests.every(guest => {
-            console.log('Validating guest:', guest);
-            const isValid = guest.name && 
-                          typeof guest.age === 'string' && 
-                          VALID_AGE_GROUPS.includes(guest.age);
+        // Detailed guest validation
+        const guestValidations = rsvpData.guests.map((guest, index) => {
+            const validation = {
+                index,
+                guest,
+                hasName: !!guest.name,
+                hasAge: !!guest.age,
+                ageIsString: typeof guest.age === 'string',
+                ageIsValid: VALID_AGE_GROUPS.includes(guest.age),
+                isValid: false
+            };
             
-            if (!isValid) {
-                console.log('Guest validation failed:', {
-                    hasName: !!guest.name,
-                    ageIsString: typeof guest.age === 'string',
-                    ageIsValid: VALID_AGE_GROUPS.includes(guest.age)
-                });
-            }
+            validation.isValid = validation.hasName && 
+                               validation.hasAge && 
+                               validation.ageIsString && 
+                               validation.ageIsValid;
             
-            return isValid;
+            return validation;
         });
 
+        console.log('Guest validations:', JSON.stringify(guestValidations, null, 2));
+
+        const isValidGuests = guestValidations.every(v => v.isValid);
+
         if (!isValidGuests) {
+            const invalidGuests = guestValidations.filter(v => !v.isValid);
             return {
                 statusCode: 400,
                 headers: corsHeaders,
-                body: JSON.stringify({ message: 'Invalid guest data' })
+                body: JSON.stringify({ 
+                    message: 'Invalid guest data',
+                    detail: {
+                        invalidGuests,
+                        validAgeGroups: VALID_AGE_GROUPS
+                    }
+                })
             };
         }
 
@@ -122,7 +142,8 @@ exports.handler = async (event) => {
             headers: corsHeaders,
             body: JSON.stringify({ 
                 message: 'Error processing RSVP',
-                error: error.message
+                error: error.message,
+                stack: error.stack
             })
         };
     }
