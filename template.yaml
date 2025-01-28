@@ -158,13 +158,19 @@ Resources:
               
               const origin = event.headers.origin || event.headers.Origin;
               
-              // Standard CORS headers for all responses
+              // Set CORS headers based on the request origin
               const corsHeaders = {
                 'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With',
-                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-                'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
-                'Access-Control-Allow-Credentials': true
+                'Access-Control-Allow-Methods': 'OPTIONS,POST',
+                'Access-Control-Allow-Credentials': 'true'
               };
+
+              // Only set Access-Control-Allow-Origin if the origin is allowed
+              if (allowedOrigins.includes(origin)) {
+                corsHeaders['Access-Control-Allow-Origin'] = origin;
+              } else {
+                corsHeaders['Access-Control-Allow-Origin'] = allowedOrigins[0];
+              }
 
               // Handle CORS preflight requests
               if (event.httpMethod === 'OPTIONS') {
@@ -290,8 +296,8 @@ Resources:
           - StatusCode: 200
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com,https://www.wadsworthreunion.com'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH
@@ -306,7 +312,7 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Origin: tru
 
   ApiMethod:
     Type: AWS::ApiGateway::Method
