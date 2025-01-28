@@ -20,7 +20,7 @@ exports.handler = async (event) => {
     try {
         const rsvpData = JSON.parse(event.body);
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
-        
+
         console.log('Debug validation:', {
             VALID_AGE_GROUPS,
             receivedGuests: rsvpData.guests,
@@ -127,7 +127,14 @@ exports.handler = async (event) => {
                     message: 'Invalid guest data',
                     detail: {
                         invalidGuests,
-                        VALID_AGE_GROUPS
+                        VALID_AGE_GROUPS,
+                        validationResults: rsvpData.guests.map(guest => ({
+                            name: guest.name,
+                            age: guest.age,
+                            nameValid: !!guest.name,
+                            ageValid: !!guest.age,
+                            ageInList: VALID_AGE_GROUPS.includes(guest.age)
+                        }))
                     }
                 })
             };
