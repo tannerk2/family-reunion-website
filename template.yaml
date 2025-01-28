@@ -281,7 +281,6 @@ RSVPFunction:
       EndpointConfiguration:
         Types:
           - REGIONAL
-
   ApiResource:
     Type: AWS::ApiGateway::Resource
     Properties:
