@@ -151,8 +151,9 @@ Resources:
             const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
             exports.handler = async (event) => {
+              // Set a single origin
               const corsHeaders = {
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
                 'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
                 'Access-Control-Allow-Methods': 'OPTIONS,POST'
               };
@@ -167,8 +168,61 @@ Resources:
               }
 
               try {
-                // ... rest of the Lambda function code remains the same ...
-                // Just make sure to include corsHeaders in all responses
+                if (!event.body) {
+                  return {
+                    statusCode: 400,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Missing request body' })
+                  };
+                }
+
+                // Parse the incoming request body
+                const rsvpData = JSON.parse(event.body);
+                const { mainContact, guests, totalGuests } = rsvpData;
+
+                // Basic validation
+                if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
+                  return {
+                    statusCode: 400,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Missing required fields' })
+                  };
+                }
+
+                // Validate guest data
+                const isValidGuests = guests.every(guest => 
+                  guest.name && 
+                  typeof guest.age === 'string' && 
+                  parseInt(guest.age) >= 0 && 
+                  parseInt(guest.age) <= 120
+                );
+
+                if (!isValidGuests) {
+                  return {
+                    statusCode: 400,
+                    headers: corsHeaders,
+                    body: JSON.stringify({ message: 'Invalid guest data' })
+                  };
+                }
+
+                // Prepare DynamoDB item
+                const item = {
+                  email: mainContact.email,
+                  submissionDate: new Date().toISOString(),
+                  name: mainContact.name,
+                  totalGuests,
+                  guests: guests.map(guest => ({
+                    name: guest.name,
+                    age: parseInt(guest.age, 10)
+                  }))
+                };
+
+                // Store in DynamoDB
+                await dynamoDB.put({
+                  TableName: process.env.RSVP_TABLE_NAME,
+                  Item: item
+                }).promise();
+
                 return {
                   statusCode: 200,
                   headers: corsHeaders,
@@ -228,7 +282,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
               method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH
