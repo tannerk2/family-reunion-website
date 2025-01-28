@@ -3,7 +3,8 @@ const { marshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 
-const AGE_GROUPS = [
+// Changed variable name to match usage in validation
+const VALID_AGE_GROUPS = [
     'Adult (18+)',
     'Teen (13-17)',
     'Kid (6-12)',
@@ -58,12 +59,25 @@ exports.handler = async (event) => {
             };
         }
 
-        // Validate each guest
+        // Add detailed validation logging
+        console.log('Valid age groups:', VALID_AGE_GROUPS);
+        
+        // Validate each guest with detailed logging
         const isValidGuests = rsvpData.guests.every(guest => {
             console.log('Validating guest:', guest);
-            return guest.name && 
-                   typeof guest.age === 'string' && 
-                   VALID_AGE_GROUPS.includes(guest.age);
+            const isValid = guest.name && 
+                          typeof guest.age === 'string' && 
+                          VALID_AGE_GROUPS.includes(guest.age);
+            
+            if (!isValid) {
+                console.log('Guest validation failed:', {
+                    hasName: !!guest.name,
+                    ageIsString: typeof guest.age === 'string',
+                    ageIsValid: VALID_AGE_GROUPS.includes(guest.age)
+                });
+            }
+            
+            return isValid;
         });
 
         if (!isValidGuests) {
