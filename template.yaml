@@ -150,11 +150,112 @@ Resources:
           - Arn
       Code:
         ZipFile: |
-          const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-          const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+          const https = require('https');
+          const crypto = require('crypto');
 
-          const client = new DynamoDBClient({});
-          const docClient = DynamoDBDocumentClient.from(client);
+          // AWS Signature V4 signing
+          function sign(key, msg) {
+            return crypto.createHmac('sha256', key).update(msg).digest();
+          }
+
+          function getSignatureKey(key, dateStamp, regionName, serviceName) {
+            const kDate = sign(('AWS4' + key), dateStamp);
+            const kRegion = sign(kDate, regionName);
+            const kService = sign(kRegion, serviceName);
+            const kSigning = sign(kService, 'aws4_request');
+            return kSigning;
+          }
+
+          function sha256(str) {
+            return crypto.createHash('sha256').update(str).digest('hex');
+          }
+
+          async function makeSignedRequest(method, host, path, region, service, payload) {
+            const now = new Date();
+            const amzdate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+            const dateStamp = amzdate.slice(0, 8);
+
+            // Create the canonical request
+            const canonicalHeaders = [
+              `content-type:application/x-amz-json-1.0`,
+              `host:${host}`,
+              `x-amz-date:${amzdate}`,
+              `x-amz-target:DynamoDB_20120810.PutItem`
+            ].join('\n') + '\n';
+
+            const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+
+            const canonicalRequest = [
+              method,
+              path,
+              '',
+              canonicalHeaders,
+              signedHeaders,
+              sha256(payload)
+            ].join('\n');
+
+            // Create string to sign
+            const algorithm = 'AWS4-HMAC-SHA256';
+            const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+            const stringToSign = [
+              algorithm,
+              amzdate,
+              credentialScope,
+              sha256(canonicalRequest)
+            ].join('\n');
+
+            // Calculate signature
+            const signingKey = getSignatureKey(
+              process.env.AWS_SECRET_ACCESS_KEY,
+              dateStamp,
+              region,
+              service
+            );
+
+            const signature = crypto
+              .createHmac('sha256', signingKey)
+              .update(stringToSign)
+              .digest('hex');
+
+            // Create authorization header
+            const authorization = [
+              `${algorithm} Credential=${process.env.AWS_ACCESS_KEY_ID}/${credentialScope}`,
+              `SignedHeaders=${signedHeaders}`,
+              `Signature=${signature}`
+            ].join(', ');
+
+            return new Promise((resolve, reject) => {
+              const options = {
+                hostname: host,
+                port: 443,
+                path: path,
+                method: method,
+                headers: {
+                  'Content-Type': 'application/x-amz-json-1.0',
+                  'X-Amz-Target': 'DynamoDB_20120810.PutItem',
+                  'X-Amz-Date': amzdate,
+                  'Authorization': authorization,
+                  'Content-Length': payload.length
+                }
+              };
+
+              const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  if (res.statusCode >= 200 && res.statusCode < 300) {
+                    resolve(data);
+                  } else {
+                    reject(new Error(`Request failed with status ${res.statusCode}: ${data}`));
+                  }
+                });
+              });
+
+              req.on('error', reject);
+              req.write(payload);
+              req.end();
+            });
+          }
 
           exports.handler = async (event) => {
             console.log('Received event:', JSON.stringify(event, null, 2));
@@ -210,32 +311,37 @@ Resources:
                 };
               }
 
-              const item = {
-                email: mainContact.email,
-                submissionDate: new Date().toISOString(),
-                name: mainContact.name,
-                totalGuests,
-                guests: guests.map(guest => ({
-                  name: guest.name,
-                  age: parseInt(guest.age, 10)
-                }))
+              // Convert to DynamoDB format
+              const dynamoDBItem = {
+                email: { S: mainContact.email },
+                submissionDate: { S: new Date().toISOString() },
+                name: { S: mainContact.name },
+                totalGuests: { N: totalGuests.toString() },
+                guests: {
+                  L: guests.map(guest => ({
+                    M: {
+                      name: { S: guest.name },
+                      age: { N: parseInt(guest.age, 10).toString() }
+                    }
+                  }))
+                }
               };
 
-              console.log('Attempting to save item:', JSON.stringify(item, null, 2));
+              const payload = JSON.stringify({
+                TableName: process.env.RSVP_TABLE_NAME,
+                Item: dynamoDBItem
+              });
 
-              try {
-                const command = new PutCommand({
-                  TableName: process.env.RSVP_TABLE_NAME,
-                  Item: item
-                });
-                
-                console.log('Executing PutCommand:', JSON.stringify(command.input, null, 2));
-                const result = await docClient.send(command);
-                console.log('PutCommand result:', JSON.stringify(result, null, 2));
-              } catch (dbError) {
-                console.error('DynamoDB error:', dbError);
-                throw dbError;
-              }
+              console.log('Attempting to save item:', payload);
+
+              await makeSignedRequest(
+                'POST',
+                `dynamodb.${process.env.AWS_REGION}.amazonaws.com`,
+                '/',
+                process.env.AWS_REGION,
+                'dynamodb',
+                payload
+              );
 
               console.log('Successfully saved item');
 
@@ -244,7 +350,7 @@ Resources:
                 headers: corsHeaders,
                 body: JSON.stringify({
                   message: 'RSVP recorded successfully',
-                  confirmationId: item.submissionDate
+                  confirmationId: dynamoDBItem.submissionDate.S
                 })
               };
             } catch (error) {
@@ -266,8 +372,6 @@ Resources:
         Variables:
           RSVP_TABLE_NAME:
             Ref: RSVPTable
-      Layers:
-        - !Sub arn:aws:lambda:${AWS::Region}:094274105915:layer:AWSSDKv3-Node18:10
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
