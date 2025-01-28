@@ -171,24 +171,34 @@
                 setSubmitStatus({ type: '', message: '' });
                 setDetailedError('');
 
+                // Create the guests array including the main contact
+                const allGuests = [
+                    { name: mainContact.name.trim(), age: 'Adult (18+)' },
+                    ...additionalGuests.map(guest => ({
+                        name: guest.name.trim(),
+                        age: guest.age
+                    }))
+                ];
+
                 const formData = {
-                    mainContact,
-                    guests: [
-                        { name: mainContact.name, age: 'Adult (18+)' },
-                        ...additionalGuests.map(guest => ({
-                            name: guest.name.trim(),
-                            age: guest.age
-                        }))
-                    ],
-                    totalGuests: guestCount
+                    mainContact: {
+                        name: mainContact.name.trim(),
+                        email: mainContact.email.trim().toLowerCase()
+                    },
+                    guests: allGuests,
+                    totalGuests: allGuests.length
                 };
 
                 // Enhanced logging
-                console.log('Form Data being sent:', JSON.stringify(formData, null, 2));
                 console.log('Validation check:', {
                     mainContact: !!formData.mainContact.name && !!formData.mainContact.email,
-                    guestsValid: formData.guests.every(g => !!g.name && !!g.age && AGE_GROUPS.includes(g.age)),
-                    guestCount: formData.totalGuests === formData.guests.length
+                    guestsValid: formData.guests.every(g => 
+                        !!g.name && 
+                        !!g.age && 
+                        AGE_GROUPS.includes(g.age)
+                    ),
+                    guestCount: formData.totalGuests,
+                    actualGuests: formData.guests.length
                 });
 
                 try {
@@ -204,24 +214,25 @@
                     console.log('API Response:', responseData);
 
                     if (!response.ok) {
-                        throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
+                        let errorMessage = responseData.message || 'Error submitting RSVP';
+                        if (responseData.detail) {
+                            errorMessage += '\n' + JSON.stringify(responseData.detail);
+                        }
+                        throw new Error(errorMessage);
                     }
 
                     setSubmitStatus({
                         type: 'success',
-                        message: `Thank you for your RSVP! We've successfully recorded your reservation for ${guestCount} ${guestCount === 1 ? 'person' : 'people'}. We can't wait to see you at the reunion!`
+                        message: `Thank you for your RSVP! We've successfully recorded your reservation for ${formData.totalGuests} ${formData.totalGuests === 1 ? 'person' : 'people'}. We can't wait to see you at the reunion!`
                     });
                     setConfirmationId(responseData.confirmationId);
                     
-                    // Only reset form after successful submission
-                    if (response.ok) {
-                        setTimeout(resetForm, 5000);
-                    }
+                    setTimeout(resetForm, 5000);
 
                 } catch (error) {
                     console.error('Submission error details:', {
                         error: error.toString(),
-                        formData: formData,
+                        formData,
                         guests: formData.guests
                     });
                     

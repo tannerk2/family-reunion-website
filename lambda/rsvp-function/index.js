@@ -22,13 +22,12 @@ exports.handler = async (event) => {
 
     try {
         if (!event.body) {
-            console.log('Missing request body');
             return {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({ 
                     message: 'Missing request body',
-                    detail: 'The request body is empty or undefined'
+                    detail: 'Request body is required'
                 })
             };
         }
@@ -36,65 +35,46 @@ exports.handler = async (event) => {
         const rsvpData = JSON.parse(event.body);
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
 
-        // Validate main contact with detailed logging
-        const mainContactValidation = {
-            hasEmail: !!rsvpData.mainContact?.email,
-            hasName: !!rsvpData.mainContact?.name,
-            isValid: !!(rsvpData.mainContact?.email && rsvpData.mainContact?.name)
-        };
-        
-        console.log('Main contact validation:', mainContactValidation);
-
-        if (!mainContactValidation.isValid) {
+        // Detailed validation checks
+        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({ 
                     message: 'Missing main contact information',
-                    detail: mainContactValidation
+                    detail: {
+                        hasEmail: !!rsvpData.mainContact?.email,
+                        hasName: !!rsvpData.mainContact?.name
+                    }
                 })
             };
         }
 
-        // Validate guests array
         if (!Array.isArray(rsvpData.guests)) {
-            console.log('Invalid guests format:', typeof rsvpData.guests);
             return {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({ 
                     message: 'Guests must be an array',
-                    detail: `Received type: ${typeof rsvpData.guests}`
+                    detail: `Received: ${typeof rsvpData.guests}`
                 })
             };
         }
 
-        // Detailed guest validation
-        const guestValidations = rsvpData.guests.map((guest, index) => {
-            const validation = {
-                index,
-                guest,
-                hasName: !!guest.name,
-                hasAge: !!guest.age,
-                ageIsString: typeof guest.age === 'string',
-                ageIsValid: VALID_AGE_GROUPS.includes(guest.age),
-                isValid: false
-            };
-            
-            validation.isValid = validation.hasName && 
-                               validation.hasAge && 
-                               validation.ageIsString && 
-                               validation.ageIsValid;
-            
-            return validation;
-        });
+        // Validate each guest with detailed feedback
+        const guestValidations = rsvpData.guests.map((guest, index) => ({
+            index,
+            hasName: !!guest.name,
+            hasAge: !!guest.age,
+            isAgeValid: VALID_AGE_GROUPS.includes(guest.age),
+            providedAge: guest.age
+        }));
 
-        console.log('Guest validations:', JSON.stringify(guestValidations, null, 2));
+        const invalidGuests = guestValidations.filter(v => 
+            !v.hasName || !v.hasAge || !v.isAgeValid
+        );
 
-        const isValidGuests = guestValidations.every(v => v.isValid);
-
-        if (!isValidGuests) {
-            const invalidGuests = guestValidations.filter(v => !v.isValid);
+        if (invalidGuests.length > 0) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
@@ -108,14 +88,31 @@ exports.handler = async (event) => {
             };
         }
 
+        if (rsvpData.totalGuests !== rsvpData.guests.length) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({ 
+                    message: 'Guest count mismatch',
+                    detail: {
+                        expectedCount: rsvpData.totalGuests,
+                        actualCount: rsvpData.guests.length
+                    }
+                })
+            };
+        }
+
         const submissionDate = new Date().toISOString();
         
         const item = {
-            email: rsvpData.mainContact.email,
-            submissionDate: submissionDate,
-            name: rsvpData.mainContact.name,
+            email: rsvpData.mainContact.email.trim().toLowerCase(),
+            submissionDate,
+            name: rsvpData.mainContact.name.trim(),
             totalGuests: rsvpData.guests.length,
-            guests: rsvpData.guests
+            guests: rsvpData.guests.map(guest => ({
+                name: guest.name.trim(),
+                age: guest.age
+            }))
         };
         
         console.log('Saving item:', JSON.stringify(item, null, 2));
