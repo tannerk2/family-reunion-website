@@ -151,24 +151,20 @@ Resources:
             const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
             exports.handler = async (event) => {
-              // Get the origin from the request
-              const origin = event.headers.origin || event.headers.Origin;
               const allowedOrigins = [
                 'https://wadsworthreunion.com',
                 'https://www.wadsworthreunion.com'
               ];
-
-              // Check if the origin is allowed
+              
+              const origin = event.headers.origin || event.headers.Origin;
+              
+              // Standard CORS headers for all responses
               const corsHeaders = {
                 'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With',
                 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+                'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
                 'Access-Control-Allow-Credentials': true
               };
-
-              // Only add the Allow-Origin header if the origin is allowed
-              if (allowedOrigins.includes(origin)) {
-                corsHeaders['Access-Control-Allow-Origin'] = origin;
-              }
 
               // Handle CORS preflight requests
               if (event.httpMethod === 'OPTIONS') {
@@ -283,30 +279,7 @@ Resources:
       RestApiId:
         Ref: ApiGateway
 
-  ApiMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: POST
-      Integration:
-        IntegrationHttpMethod: POST
-        Type: AWS_PROXY
-        Uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-      ResourceId:
-        Ref: ApiResource
-      RestApiId:
-        Ref: ApiGateway
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-
-  ApiCorsMethod:
+ApiCorsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
@@ -318,11 +291,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
               method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: |
-                '#set($origin = $input.params("Origin"))
-                #if($origin == "https://wadsworthreunion.com" || $origin == "https://www.wadsworthreunion.com")
-                  $origin
-                #end'
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com,https://www.wadsworthreunion.com'"
             ResponseTemplates:
               application/json: "{}"
         PassthroughBehavior: WHEN_NO_MATCH
@@ -338,6 +307,22 @@ Resources:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
+      ResourceId:
+        Ref: ApiResource
+      RestApiId:
+        Ref: ApiGateway
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
