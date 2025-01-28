@@ -337,7 +337,6 @@ Resources:
     Properties:
       RestApiId:
         Ref: ApiGateway
-      StageName: prod
   ApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
