@@ -150,220 +150,111 @@ Resources:
           - Arn
       Code:
         ZipFile: |
-          const https = require('https');
-          const crypto = require('crypto');
-
-          // AWS Signature V4 signing
-          function sign(key, msg) {
-            return crypto.createHmac('sha256', key).update(msg).digest();
-          }
-
-          function getSignatureKey(key, dateStamp, regionName, serviceName) {
-            const kDate = sign(('AWS4' + key), dateStamp);
-            const kRegion = sign(kDate, regionName);
-            const kService = sign(kRegion, serviceName);
-            const kSigning = sign(kService, 'aws4_request');
-            return kSigning;
-          }
-
-          function sha256(str) {
-            return crypto.createHash('sha256').update(str).digest('hex');
-          }
-
-          async function makeSignedRequest(method, host, path, region, service, payload) {
-            const now = new Date();
-            const amzdate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-            const dateStamp = amzdate.slice(0, 8);
-
-            // Create the canonical request
-            const canonicalHeaders = [
-              `content-type:application/x-amz-json-1.0`,
-              `host:${host}`,
-              `x-amz-date:${amzdate}`,
-              `x-amz-target:DynamoDB_20120810.PutItem`
-            ].join('\n') + '\n';
-
-            const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
-
-            const canonicalRequest = [
-              method,
-              path,
-              '',
-              canonicalHeaders,
-              signedHeaders,
-              sha256(payload)
-            ].join('\n');
-
-            // Create string to sign
-            const algorithm = 'AWS4-HMAC-SHA256';
-            const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-            const stringToSign = [
-              algorithm,
-              amzdate,
-              credentialScope,
-              sha256(canonicalRequest)
-            ].join('\n');
-
-            // Calculate signature
-            const signingKey = getSignatureKey(
-              process.env.AWS_SECRET_ACCESS_KEY,
-              dateStamp,
-              region,
-              service
-            );
-
-            const signature = crypto
-              .createHmac('sha256', signingKey)
-              .update(stringToSign)
-              .digest('hex');
-
-            // Create authorization header
-            const authorization = [
-              `${algorithm} Credential=${process.env.AWS_ACCESS_KEY_ID}/${credentialScope}`,
-              `SignedHeaders=${signedHeaders}`,
-              `Signature=${signature}`
-            ].join(', ');
-
-            return new Promise((resolve, reject) => {
-              const options = {
-                hostname: host,
-                port: 443,
-                path: path,
-                method: method,
-                headers: {
-                  'Content-Type': 'application/x-amz-json-1.0',
-                  'X-Amz-Target': 'DynamoDB_20120810.PutItem',
-                  'X-Amz-Date': amzdate,
-                  'Authorization': authorization,
-                  'Content-Length': payload.length
-                }
-              };
-
-              const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                  if (res.statusCode >= 200 && res.statusCode < 300) {
-                    resolve(data);
-                  } else {
-                    reject(new Error(`Request failed with status ${res.statusCode}: ${data}`));
-                  }
-                });
-              });
-
-              req.on('error', reject);
-              req.write(payload);
-              req.end();
-            });
-          }
-
+          const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+          const { marshall } = require('@aws-sdk/util-dynamodb');
+          
+          const dynamoDB = new DynamoDBClient();
+          
           exports.handler = async (event) => {
-            console.log('Received event:', JSON.stringify(event, null, 2));
-            
-            const corsHeaders = {
-              'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
-              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-              'Access-Control-Allow-Methods': 'OPTIONS,POST'
-            };
+            const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+            const { marshall } = require('@aws-sdk/util-dynamodb');
 
-            if (event.httpMethod === 'OPTIONS') {
-              return {
-                statusCode: 200,
-                headers: corsHeaders,
-                body: ''
-              };
-            }
+            const dynamoDB = new DynamoDBClient();
 
-            try {
-              if (!event.body) {
-                return {
-                  statusCode: 400,
-                  headers: corsHeaders,
-                  body: JSON.stringify({ message: 'Missing request body' })
+            exports.handler = async (event) => {
+                console.log('Received event:', JSON.stringify(event, null, 2));
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
+                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST'
                 };
-              }
 
-              const rsvpData = JSON.parse(event.body);
-              console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
-              
-              const { mainContact, guests, totalGuests } = rsvpData;
-
-              if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
-                return {
-                  statusCode: 400,
-                  headers: corsHeaders,
-                  body: JSON.stringify({ message: 'Missing required fields' })
-                };
-              }
-
-              const isValidGuests = guests.every(guest => 
-                guest.name && 
-                typeof guest.age === 'string' && 
-                parseInt(guest.age) >= 0 && 
-                parseInt(guest.age) <= 120
-              );
-
-              if (!isValidGuests) {
-                return {
-                  statusCode: 400,
-                  headers: corsHeaders,
-                  body: JSON.stringify({ message: 'Invalid guest data' })
-                };
-              }
-
-              // Convert to DynamoDB format
-              const dynamoDBItem = {
-                email: { S: mainContact.email },
-                submissionDate: { S: new Date().toISOString() },
-                name: { S: mainContact.name },
-                totalGuests: { N: totalGuests.toString() },
-                guests: {
-                  L: guests.map(guest => ({
-                    M: {
-                      name: { S: guest.name },
-                      age: { N: parseInt(guest.age, 10).toString() }
-                    }
-                  }))
+                if (event.httpMethod === 'OPTIONS') {
+                    return {
+                        statusCode: 200,
+                        headers: corsHeaders,
+                        body: ''
+                    };
                 }
-              };
 
-              const payload = JSON.stringify({
-                TableName: process.env.RSVP_TABLE_NAME,
-                Item: dynamoDBItem
-              });
+                try {
+                    if (!event.body) {
+                        return {
+                            statusCode: 400,
+                            headers: corsHeaders,
+                            body: JSON.stringify({ message: 'Missing request body' })
+                        };
+                    }
 
-              console.log('Attempting to save item:', payload);
+                    const rsvpData = JSON.parse(event.body);
+                    console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
+                    
+                    const { mainContact, guests, totalGuests } = rsvpData;
 
-              await makeSignedRequest(
-                'POST',
-                `dynamodb.${process.env.AWS_REGION}.amazonaws.com`,
-                '/',
-                process.env.AWS_REGION,
-                'dynamodb',
-                payload
-              );
+                    if (!mainContact.email || !mainContact.name || !guests || guests.length === 0) {
+                        return {
+                            statusCode: 400,
+                            headers: corsHeaders,
+                            body: JSON.stringify({ message: 'Missing required fields' })
+                        };
+                    }
 
-              console.log('Successfully saved item');
+                    const isValidGuests = guests.every(guest => 
+                        guest.name && 
+                        typeof guest.age === 'string' && 
+                        parseInt(guest.age) >= 0 && 
+                        parseInt(guest.age) <= 120
+                    );
 
-              return {
-                statusCode: 200,
-                headers: corsHeaders,
-                body: JSON.stringify({
-                  message: 'RSVP recorded successfully',
-                  confirmationId: dynamoDBItem.submissionDate.S
-                })
-              };
-            } catch (error) {
-              console.error('Error processing RSVP:', error);
-              return {
-                statusCode: 500,
-                headers: corsHeaders,
-                body: JSON.stringify({ 
-                  message: 'Error processing RSVP',
-                  error: error.message 
-                })
-              };
-            }
+                    if (!isValidGuests) {
+                        return {
+                            statusCode: 400,
+                            headers: corsHeaders,
+                            body: JSON.stringify({ message: 'Invalid guest data' })
+                        };
+                    }
+
+                    const submissionDate = new Date().toISOString();
+                    
+                    const item = {
+                        email: mainContact.email,
+                        submissionDate: submissionDate,
+                        name: mainContact.name,
+                        totalGuests: totalGuests,
+                        guests: guests.map(guest => ({
+                            name: guest.name,
+                            age: parseInt(guest.age, 10)
+                        }))
+                    };
+
+                    const command = new PutItemCommand({
+                        TableName: process.env.RSVP_TABLE_NAME,
+                        Item: marshall(item)
+                    });
+
+                    await dynamoDB.send(command);
+
+                    return {
+                        statusCode: 200,
+                        headers: corsHeaders,
+                        body: JSON.stringify({
+                            message: 'RSVP recorded successfully',
+                            confirmationId: submissionDate
+                        })
+                    };
+                } catch (error) {
+                    console.error('Error processing RSVP:', error);
+                    return {
+                        statusCode: 500,
+                        headers: corsHeaders,
+                        body: JSON.stringify({ 
+                            message: 'Error processing RSVP',
+                            error: error.message 
+                        })
+                    };
+                }
+            };
           };
       Runtime: nodejs18.x
       Timeout: 30
