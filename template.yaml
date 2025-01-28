@@ -282,8 +282,6 @@ Resources:
         Variables:
           RSVP_TABLE_NAME:
             Ref: RSVPTable
-          AWS_REGION:
-            Ref: AWS::Region
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
