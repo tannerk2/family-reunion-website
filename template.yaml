@@ -21,6 +21,33 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  LambdaCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  RSVPFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${DomainName}-rsvp
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: rsvp-function.zip
+      Runtime: nodejs18.x
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          RSVP_TABLE_NAME:
+            Ref: RSVPTable
+
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
