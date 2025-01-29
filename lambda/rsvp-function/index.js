@@ -32,6 +32,10 @@ exports.handler = async (event) => {
                 hasEmail: !!rsvpData.mainContact?.email,
                 hasName: !!rsvpData.mainContact?.name,
                 hasAge: !!rsvpData.mainContact?.age,
+                hasAttendance: {
+                    friday: rsvpData.mainContact?.attendingFriday,
+                    saturday: rsvpData.mainContact?.attendingSaturday
+                },
                 email: rsvpData.mainContact?.email,
                 name: rsvpData.mainContact?.name,
                 age: rsvpData.mainContact?.age
@@ -46,7 +50,8 @@ exports.handler = async (event) => {
         });
 
         // Main contact validation
-        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age) {
+        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age || 
+            (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
             console.log('Main contact validation failed');
             return {
                 statusCode: 400,
@@ -59,7 +64,8 @@ exports.handler = async (event) => {
                             hasEmail: !!rsvpData.mainContact?.email,
                             hasName: !!rsvpData.mainContact?.name,
                             hasAge: !!rsvpData.mainContact?.age,
-                            ageValid: VALID_AGE_GROUPS.includes(rsvpData.mainContact?.age)
+                            ageValid: VALID_AGE_GROUPS.includes(rsvpData.mainContact?.age),
+                            hasAttendanceDays: rsvpData.mainContact?.attendingFriday || rsvpData.mainContact?.attendingSaturday
                         }
                     }
                 })
@@ -159,6 +165,10 @@ exports.handler = async (event) => {
             submissionDate,
             name: rsvpData.mainContact.name.trim(),
             age: rsvpData.mainContact.age,
+            attendance: {
+                friday: rsvpData.mainContact.attendingFriday,
+                saturday: rsvpData.mainContact.attendingSaturday
+            },
             totalGuests: rsvpData.guests.length,
             guests: rsvpData.guests.map(guest => ({
                 name: guest.name.trim(),

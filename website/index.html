@@ -78,7 +78,6 @@
                 'B': 'Baby (1 and under)'
             };
 
-            // Add the missing validateAgeGroup function
             const validateAgeGroup = (ageGroup) => {
                 return AGE_GROUPS.includes(ageGroup);
             };
@@ -86,7 +85,9 @@
             const [mainContact, setMainContact] = React.useState({
                 name: '',
                 email: '',
-                age: ''
+                age: '',
+                attendingFriday: false,
+                attendingSaturday: false
             });
             const [guestCount, setGuestCount] = React.useState(1);
             const [additionalGuests, setAdditionalGuests] = React.useState([]);
@@ -96,20 +97,18 @@
             const [confirmationId, setConfirmationId] = React.useState('');
 
             const resetForm = () => {
-                setMainContact({ name: '', email: '', age: '' });
+                setMainContact({ 
+                    name: '', 
+                    email: '', 
+                    age: '',
+                    attendingFriday: false,
+                    attendingSaturday: false
+                });
                 setGuestCount(1);
-                setAdditionalGuests([]); // Fixed typo from ssetAdditionalGuests
+                setAdditionalGuests([]);
                 setDetailedError('');
                 setSubmitStatus({ type: '', message: '' });
                 setConfirmationId('');
-            };
-
-            const handleMainContactChange = (e) => {
-                const { name, value } = e.target;
-                setMainContact(prev => ({
-                    ...prev,
-                    [name]: value
-                }));
             };
 
             const handleGuestCountChange = (e) => {
@@ -152,10 +151,26 @@
             };
 
             const validateForm = () => {
-                if (!mainContact.email?.trim() || !mainContact.name?.trim()) {
+                if (!mainContact.email?.trim() || !mainContact.name?.trim() || !mainContact.age) {
                     setSubmitStatus({
                         type: 'error',
-                        message: 'Please fill in your name and email'
+                        message: 'Please fill in your name, email, and age group'
+                    });
+                    return false;
+                }
+
+                if (!mainContact.attendingFriday && !mainContact.attendingSaturday) {
+                    setSubmitStatus({
+                        type: 'error',
+                        message: 'Please select at least one day to attend'
+                    });
+                    return false;
+                }
+
+                if (!validateAgeGroup(mainContact.age)) {
+                    setSubmitStatus({
+                        type: 'error',
+                        message: 'Please select a valid age group for yourself'
                     });
                     return false;
                 }
@@ -198,9 +213,12 @@
                 setSubmitStatus({ type: '', message: '' });
                 setDetailedError('');
 
-                // Create the guests array including the main contact
+                // Create the guests array including the main contact with age
                 const allGuests = [
-                    { name: mainContact.name.trim(), age: 'A' }, // Changed from 'Adult (18+)'
+                    { 
+                        name: mainContact.name.trim(), 
+                        age: mainContact.age 
+                    },
                     ...additionalGuests.map(guest => ({
                         name: guest.name.trim(),
                         age: guest.age
@@ -211,7 +229,7 @@
                     mainContact: {
                         name: mainContact.name.trim(),
                         email: mainContact.email.trim().toLowerCase(),
-                        age: mainContact.age
+                        age: mainContact.age // Include age in mainContact data
                     },
                     guests: allGuests,
                     totalGuests: allGuests.length
@@ -355,6 +373,38 @@
                                     </option>
                                 ))}
                             </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Which days will you be attending?</label>
+                            <div className="space-y-2">
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="attendingFriday"
+                                        name="attendingFriday"
+                                        checked={mainContact.attendingFriday}
+                                        onChange={handleMainContactChange}
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="attendingFriday" className="ml-2 text-gray-700">
+                                        Friday, June 20
+                                    </label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="attendingSaturday"
+                                        name="attendingSaturday"
+                                        checked={mainContact.attendingSaturday}
+                                        onChange={handleMainContactChange}
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="attendingSaturday" className="ml-2 text-gray-700">
+                                        Saturday, June 21
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                         
                         <div>
