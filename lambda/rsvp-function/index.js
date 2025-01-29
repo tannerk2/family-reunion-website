@@ -1,4 +1,4 @@
-//lambda-update-test-1
+//lambda-update-test-2
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall } = require('@aws-sdk/util-dynamodb');
 
