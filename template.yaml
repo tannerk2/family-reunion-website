@@ -27,27 +27,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  RSVPFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${DomainName}-rsvp
-      Handler: index.handler
-      Role:
-        Fn::GetAtt:
-          - LambdaExecutionRole
-          - Arn
-      Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: rsvp-function.zip
-      Runtime: nodejs18.x
-      Timeout: 30
-      MemorySize: 128
-      Environment:
-        Variables:
-          RSVP_TABLE_NAME:
-            Ref: RSVPTable
-
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -567,6 +546,8 @@ Resources:
               runtime-versions:
                 nodejs: 18
               commands:
+                # Navigate to Lambda function directory (adjust path as needed)
+                - cd lambda/rsvp-function
                 # Install dependencies for Lambda function
                 - npm install @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
             build:
@@ -577,8 +558,10 @@ Resources:
                 - aws s3 cp rsvp-function.zip s3://${LAMBDA_CODE_BUCKET}/rsvp-function.zip
                 # Update Lambda function
                 - aws lambda update-function-code --function-name ${DOMAIN_NAME}-rsvp --s3-bucket ${LAMBDA_CODE_BUCKET} --s3-key rsvp-function.zip
+                # Navigate back to root
+                - cd ../..
                 # Build and deploy website
-                - aws s3 sync . s3://${WEBSITE_BUCKET} --exclude "*" --include "*.html" --include "*.css" --include "*.js" --include "*.jpg" --include "*.png" --include "*.ico"
+                - aws s3 sync website/ s3://${WEBSITE_BUCKET} --exclude "*" --include "*.html" --include "*.css" --include "*.js" --include "*.jpg" --include "*.png" --include "*.ico"
                 # Invalidate CloudFront cache
                 - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_ID} --paths "/*"
                 # Deploy API changes
