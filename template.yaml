@@ -527,10 +527,7 @@ Resources:
     Properties:
       Name:
         Fn::Sub: ${AWS::StackName}-build
-      ServiceRole:
-        Fn::GetAtt:
-        - CodeBuildServiceRole
-        - Arn
+      ServiceRole: !Ref CodeBuildServiceRole
       Artifacts:
         Type: CODEPIPELINE
       Environment:
