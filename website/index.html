@@ -85,7 +85,8 @@
 
             const [mainContact, setMainContact] = React.useState({
                 name: '',
-                email: ''
+                email: '',
+                age: ''
             });
             const [guestCount, setGuestCount] = React.useState(1);
             const [additionalGuests, setAdditionalGuests] = React.useState([]);
@@ -95,7 +96,7 @@
             const [confirmationId, setConfirmationId] = React.useState('');
 
             const resetForm = () => {
-                setMainContact({ name: '', email: '' });
+                setMainContact({ name: '', email: '', age: '' });
                 setGuestCount(1);
                 setAdditionalGuests([]); // Fixed typo from ssetAdditionalGuests
                 setDetailedError('');
@@ -209,7 +210,8 @@
                 const formData = {
                     mainContact: {
                         name: mainContact.name.trim(),
-                        email: mainContact.email.trim().toLowerCase()
+                        email: mainContact.email.trim().toLowerCase(),
+                        age: mainContact.age
                     },
                     guests: allGuests,
                     totalGuests: allGuests.length

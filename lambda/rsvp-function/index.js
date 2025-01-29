@@ -32,8 +32,10 @@ exports.handler = async (event) => {
             mainContact: {
                 hasEmail: !!rsvpData.mainContact?.email,
                 hasName: !!rsvpData.mainContact?.name,
+                hasAge: !!rsvpData.mainContact?.age,
                 email: rsvpData.mainContact?.email,
-                name: rsvpData.mainContact?.name
+                name: rsvpData.mainContact?.name,
+                age: rsvpData.mainContact?.age
             },
             guests: {
                 isArray: Array.isArray(rsvpData.guests),
@@ -45,7 +47,7 @@ exports.handler = async (event) => {
         });
 
         // Main contact validation
-        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name) {
+        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age) {
             console.log('Main contact validation failed');
             return {
                 statusCode: 400,
@@ -56,8 +58,26 @@ exports.handler = async (event) => {
                         mainContact: rsvpData.mainContact,
                         validation: {
                             hasEmail: !!rsvpData.mainContact?.email,
-                            hasName: !!rsvpData.mainContact?.name
+                            hasName: !!rsvpData.mainContact?.name,
+                            hasAge: !!rsvpData.mainContact?.age,
+                            ageValid: VALID_AGE_GROUPS.includes(rsvpData.mainContact?.age)
                         }
+                    }
+                })
+            };
+        }
+
+        // Validate main contact age group
+        if (!VALID_AGE_GROUPS.includes(rsvpData.mainContact.age)) {
+            console.log('Main contact age validation failed');
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid age group for main contact',
+                    detail: {
+                        providedAge: rsvpData.mainContact.age,
+                        validAgeGroups: VALID_AGE_GROUPS
                     }
                 })
             };
@@ -139,6 +159,7 @@ exports.handler = async (event) => {
             email: rsvpData.mainContact.email.trim().toLowerCase(),
             submissionDate,
             name: rsvpData.mainContact.name.trim(),
+            age: rsvpData.mainContact.age,
             totalGuests: rsvpData.guests.length,
             guests: rsvpData.guests.map(guest => ({
                 name: guest.name.trim(),
