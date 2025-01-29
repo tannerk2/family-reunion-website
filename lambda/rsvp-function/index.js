@@ -1,29 +1,14 @@
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { marshall } = require('@aws-sdk/util-dynamodb');
+//UpdateRSVP
+const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 const VALID_AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
 
-exports.handler = async (event) => {
-    // Log initial event and environment
-    console.log('Environment check:', {
-        tableName: process.env.RSVP_TABLE_NAME,
-        hasTableName: !!process.env.RSVP_TABLE_NAME,
-        nodeEnv: process.env.NODE_ENV,
-        allVars: process.env
-    });
-    
-    console.log('Event received:', JSON.stringify(event, null, 2));
-    
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-        'Access-Control-Allow-Methods': 'OPTIONS,POST'
-    };
-
+// RSVP submission handler
+const submitHandler = async (rsvpData, corsHeaders) => {
     try {
-        // Parse and log the request body
-        const rsvpData = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+        // Log the request body
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
 
         // Log validation details
@@ -212,6 +197,159 @@ exports.handler = async (event) => {
                     type: error.constructor.name,
                     stack: error.stack
                 }
+            })
+        };
+    }
+};
+
+// Handler for looking up RSVPs
+const lookupHandler = async (email, corsHeaders) => {
+    const params = {
+        TableName: process.env.RSVP_TABLE_NAME,
+        Key: marshall({
+            email: email.toLowerCase(),
+        }),
+    };
+
+    if (!process.env.RSVP_TABLE_NAME) {
+        console.error('Missing RSVP_TABLE_NAME environment variable');
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'Configuration error: Missing table name'
+            })
+        };
+    }
+
+    try {
+        const { Item } = await dynamoDB.send(new GetItemCommand(params));
+        
+        if (!Item) {
+            return {
+                statusCode: 404,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: 'No RSVP found for this email' })
+            };
+        }
+
+        const rsvpData = unmarshall(Item);
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify(rsvpData)
+        };
+    } catch (error) {
+        console.error('Error looking up RSVP:', error);
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'Error looking up RSVP',
+                error: error.message
+            })
+        };
+    }
+};
+
+// Handler for updating RSVPs
+const updateHandler = async (rsvpData, corsHeaders) => {
+    // Validate the update data (similar to original handler)
+    if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age ||
+        (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
+        return {
+            statusCode: 400,
+            headers: corsHeaders,
+            body: JSON.stringify({ message: 'Invalid main contact data' })
+        };
+    }
+
+    if (!Array.isArray(rsvpData.guests)) {
+        return {
+            statusCode: 400,
+            headers: corsHeaders,
+            body: JSON.stringify({ 
+                message: 'Guests must be an array' 
+            })
+        };
+    }
+
+    try {
+        const submissionDate = new Date().toISOString();
+        const item = {
+            email: rsvpData.mainContact.email.toLowerCase(),
+            submissionDate,
+            name: rsvpData.mainContact.name,
+            age: rsvpData.mainContact.age,
+            attendance: {
+                friday: rsvpData.mainContact.attendingFriday,
+                saturday: rsvpData.mainContact.attendingSaturday
+            },
+            totalGuests: rsvpData.guests.length,
+            guests: rsvpData.guests
+        };
+
+        await dynamoDB.send(new PutItemCommand({
+            TableName: process.env.RSVP_TABLE_NAME,
+            Item: marshall(item)
+        }));
+
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'RSVP updated successfully',
+                confirmationId: submissionDate
+            })
+        };
+    } catch (error) {
+        console.error('Error updating RSVP:', error);
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'Error updating RSVP',
+                error: error.message
+            })
+        };
+    }
+};
+
+// Main handler
+exports.handler = async (event) => {
+    console.log('Event received:', JSON.stringify(event, null, 2));
+
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': 'https://wadsworthreunion.com',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+        'Access-Control-Allow-Methods': 'OPTIONS,POST'
+    };
+
+    try {
+        const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+        let response;
+
+        // Handle different paths
+        switch (event.path) {
+            case '/rsvp/lookup':
+                response = await lookupHandler(body.email, corsHeaders);
+                break;
+            case '/rsvp/update':
+                response = await updateHandler(body, corsHeaders);
+                break;
+            default:
+                response = await submitHandler(body, corsHeaders);
+        }
+
+        return response;
+    } catch (error) {
+        console.error('Error processing request:', error);
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({
+                message: 'Error processing request',
+                error: error.message
             })
         };
     }

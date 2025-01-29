@@ -55,6 +55,9 @@
             <!-- RSVP Form -->
             <div id="rsvp-form"></div>
 
+            <!-- Update RSVP Form -->
+            <div id="update-rsvp-form"></div>
+
             <!-- Fun Footer -->
             <div class="text-center text-gray-600">
                 <p class="text-lg">Looking forward to seeing everyone!</p>
@@ -64,19 +67,116 @@
     </main>
 
     <script type="text/babel">
-        // Configuration
-        const API_ENDPOINT = 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp';
+    // Configuration
+    const API_ENDPOINTS = {
+        submit: 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp',
+        lookup: 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp/lookup',
+        update: 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp/update'
+    };
+
+    // Shared constants
+    const AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
+    const AGE_GROUP_LABELS = {
+        'A': 'Adult (18+)',
+        'T': 'Teen (13-17)',
+        'K': 'Kid (6-12)',
+        'L': 'Little (2-5)',
+        'B': 'Baby (1 and under)'
+    };
+
+    // UpdateRSVPForm Component
+    const UpdateRSVPForm = () => {
+        const [email, setEmail] = React.useState('');
+        const [loading, setLoading] = React.useState(false);
+        const [error, setError] = React.useState('');
+        const [rsvpData, setRsvpData] = React.useState(null);
+        const [mainContact, setMainContact] = React.useState(null);
+        const [guestCount, setGuestCount] = React.useState(1);
+        const [additionalGuests, setAdditionalGuests] = React.useState([]);
+        const [isSubmitting, setIsSubmitting] = React.useState(false);
+        const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
+
+        const handleEmailSubmit = async (e) => {
+            e.preventDefault();
+            setLoading(true);
+            setError('');
+
+            try {
+                const response = await fetch(API_ENDPOINTS.lookup, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email: email.toLowerCase().trim() })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to find RSVP');
+                }
+
+                setMainContact({
+                    name: data.name,
+                    email: data.email,
+                    age: data.age,
+                    attendingFriday: data.attendance.friday,
+                    attendingSaturday: data.attendance.saturday
+                });
+
+                setGuestCount(data.guests.length);
+                setAdditionalGuests(data.guests.slice(1));
+                setRsvpData(data);
+            } catch (error) {
+                setError(error.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        return (
+            <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
+                <h2 className="text-3xl font-bold text-orange-600 mb-6 text-center">Update Your RSVP</h2>
+                
+                {!rsvpData ? (
+                    <form onSubmit={handleEmailSubmit} className="max-w-lg mx-auto">
+                        <div className="mb-6">
+                            <label className="block text-lg font-medium text-gray-700 mb-2">
+                                Enter your email to find your RSVP
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                                required
+                            />
+                        </div>
+                        
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-50 border-2 border-red-500 rounded-lg text-red-700">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
+                                loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 hover:scale-105'
+                            }`}
+                        >
+                            {loading ? 'Looking up RSVP...' : 'Find My RSVP'}
+                        </button>
+                    </form>
+                ) : (
+                    <div>Found your RSVP! Update form coming soon...</div>
+                )}
+            </section>
+        );
+    };
 
         const RSVPForm = () => {
-            const AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
-
-            const AGE_GROUP_LABELS = {
-                'A': 'Adult (18+)',
-                'T': 'Teen (13-17)',
-                'K': 'Kid (6-12)',
-                'L': 'Little (2-5)',
-                'B': 'Baby (1 and under)'
-            };
 
             const validateAgeGroup = (ageGroup) => {
                 return AGE_GROUPS.includes(ageGroup);
@@ -257,7 +357,7 @@
                 });
 
                 try {
-                    const response = await fetch(API_ENDPOINT, {
+                    const response = await fetch(API_ENDPOINTS.submit, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -464,17 +564,30 @@
                             </div>
                         ))}
 
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
-                                isSubmitting 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : 'hover:bg-orange-600 hover:scale-105'
-                            }`}
-                        >
-                            {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
-                        </button>
+                        <div className="flex flex-col space-y-4">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
+                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 hover:scale-105'
+                                }`}
+                            >
+                                {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    document.getElementById('update-rsvp-form').scrollIntoView({ 
+                                        behavior: 'smooth',
+                                        block: 'start'
+                                    });
+                                }}
+                                className="w-full bg-gray-100 text-gray-700 text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 hover:bg-gray-200 hover:scale-105"
+                            >
+                                Change Existing RSVP
+                            </button>
+                        </div>
                     </form>
                 </section>
             );
@@ -482,6 +595,7 @@
 
         // Render the React component
         ReactDOM.render(<RSVPForm />, document.getElementById('rsvp-form'));
+        ReactDOM.render(<UpdateRSVPForm />, document.getElementById('update-rsvp-form'));
     </script>
 </body>
 </html>

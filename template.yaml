@@ -235,6 +235,22 @@ Resources:
                   - !GetAtt RSVPTable.Arn
                   - !Sub "${RSVPTable.Arn}/index/*"
 
+  LambdaPermissionLookup:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RSVPFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/rsvp/lookup
+
+  LambdaPermissionUpdate:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RSVPFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/rsvp/update
+
   RSVPFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -257,6 +273,7 @@ Resources:
             Ref: RSVPTable
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
           DEBUG: "*"
+          API_BASE_PATH: "/rsvp"
 
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
@@ -307,6 +324,60 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
+  ApiLookupCorsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+            ResponseTemplates:
+              application/json: "{}"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref ApiLookupResource
+      RestApiId: !Ref ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApiUpdateCorsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+            ResponseTemplates:
+              application/json: "{}"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref ApiUpdateResource
+      RestApiId: !Ref ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   ApiMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -344,10 +415,104 @@ Resources:
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
 
+  # Lookup API Resource
+  ApiLookupResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiResource
+      PathPart: lookup
+      RestApiId: !Ref ApiGateway
+
+  # Update API Resource
+  ApiUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiResource
+      PathPart: update
+      RestApiId: !Ref ApiGateway
+
+  # Lookup Method
+  ApiLookupMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 400
+            SelectionPattern: ".*[Bad Request].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 500
+            SelectionPattern: ".*[Error].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+      ResourceId: !Ref ApiLookupResource
+      RestApiId: !Ref ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # Update Method
+  ApiUpdateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RSVPFunction.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 400
+            SelectionPattern: ".*[Bad Request].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+          - StatusCode: 500
+            SelectionPattern: ".*[Error].*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'https://wadsworthreunion.com'"
+      ResourceId: !Ref ApiUpdateResource
+      RestApiId: !Ref ApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-    - ApiMethod
+      - ApiMethod
+      - ApiLookupMethod
+      - ApiUpdateMethod
+      - ApiCorsMethod
+      - ApiLookupCorsMethod
+      - ApiUpdateCorsMethod
+      - ApiResource
+      - ApiLookupResource
+      - ApiUpdateResource
     Properties:
       RestApiId:
         Ref: ApiGateway
@@ -536,9 +701,6 @@ Resources:
             Value: !Ref DomainName
       Source:
         Type: CODEPIPELINE
-        BuildSpec: buildspec.yml
-      Source:
-        Type: CODEPIPELINE
         BuildSpec: |
           version: 0.2
           phases:
@@ -647,7 +809,10 @@ Outputs:
     Description: CloudFront Distribution Domain Name
     Value:
       Fn::Sub: https://${CloudFrontDistribution.DomainName}
-  ApiEndpoint:
-    Description: API Gateway Endpoint
+  ApiEndpoints:
+    Description: API Gateway Endpoints
     Value:
-      Fn::Sub: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/rsvp
+      Fn::Sub: |
+        RSVP: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/rsvp
+        Lookup: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/rsvp/lookup
+        Update: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/rsvp/update
