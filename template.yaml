@@ -251,6 +251,7 @@ Resources:
                   - dynamodb:BatchGetItem
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
+                  - dynamodb:DescribeTable
                 Resource:
                   - !GetAtt RSVPTable.Arn
                   - !Sub "${RSVPTable.Arn}/index/*"
