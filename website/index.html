@@ -68,6 +68,9 @@
 
     <script type="text/babel">
 
+    import React, { useState } from 'react';
+    import { Alert, AlertDescription } from '@/components/ui/alert';
+
     // Configuration
     const API_ENDPOINTS = {
         submit: 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp',
@@ -87,15 +90,15 @@
 
     // UpdateRSVPForm Component
     const UpdateRSVPForm = () => {
-        const [email, setEmail] = React.useState('');
-        const [loading, setLoading] = React.useState(false);
-        const [error, setError] = React.useState('');
-        const [rsvpData, setRsvpData] = React.useState(null);
-        const [mainContact, setMainContact] = React.useState(null);
-        const [guestCount, setGuestCount] = React.useState(1);
-        const [additionalGuests, setAdditionalGuests] = React.useState([]);
-        const [isSubmitting, setIsSubmitting] = React.useState(false);
-        const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
+        const [email, setEmail] = useState('');
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState('');
+        const [rsvpData, setRsvpData] = useState(null);
+        const [mainContact, setMainContact] = useState(null);
+        const [guestCount, setGuestCount] = useState(1);
+        const [additionalGuests, setAdditionalGuests] = useState([]);
+        const [isSubmitting, setIsSubmitting] = useState(false);
+        const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
 
         const handleEmailSubmit = async (e) => {
             e.preventDefault();
@@ -135,6 +138,93 @@
             }
         };
 
+        const handleMainContactChange = (e) => {
+            const { name, value, type, checked } = e.target;
+            setMainContact(prev => ({
+                ...prev,
+                [name]: type === 'checkbox' ? checked : value
+            }));
+        };
+
+        const handleGuestCountChange = (e) => {
+            const count = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 20);
+            setGuestCount(count);
+            
+            if (count === 1) {
+                setAdditionalGuests([]);
+            } else {
+                const currentGuests = [...additionalGuests];
+                if (count - 1 > currentGuests.length) {
+                    const newGuests = Array(count - 1 - currentGuests.length)
+                        .fill(null)
+                        .map(() => ({ name: '', age: '' }));
+                    setAdditionalGuests([...currentGuests, ...newGuests]);
+                } else {
+                    setAdditionalGuests(currentGuests.slice(0, count - 1));
+                }
+            }
+        };
+
+        const handleGuestChange = (index, field, value) => {
+            setAdditionalGuests(prev => {
+                const newGuests = [...prev];
+                newGuests[index] = {
+                    ...newGuests[index],
+                    [field]: value
+                };
+                return newGuests;
+            });
+        };
+
+        const handleUpdateSubmit = async (e) => {
+            e.preventDefault();
+            setIsSubmitting(true);
+            setSubmitStatus({ type: '', message: '' });
+
+            const updateData = {
+                mainContact: {
+                    ...mainContact,
+                    email: mainContact.email.toLowerCase().trim()
+                },
+                guests: [
+                    {
+                        name: mainContact.name,
+                        age: mainContact.age
+                    },
+                    ...additionalGuests
+                ],
+                totalGuests: guestCount
+            };
+
+            try {
+                const response = await fetch(API_ENDPOINTS.update, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to update RSVP');
+                }
+
+                setSubmitStatus({
+                    type: 'success',
+                    message: 'Your RSVP has been successfully updated!'
+                });
+            } catch (error) {
+                setSubmitStatus({
+                    type: 'error',
+                    message: error.message
+                });
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+
         return (
             <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
                 <h2 className="text-3xl font-bold text-orange-600 mb-6 text-center">Update Your RSVP</h2>
@@ -155,9 +245,9 @@
                         </div>
                         
                         {error && (
-                            <div className="mb-6 p-4 bg-red-50 border-2 border-red-500 rounded-lg text-red-700">
-                                {error}
-                            </div>
+                            <Alert variant="destructive" className="mb-6">
+                                <AlertDescription>{error}</AlertDescription>
+                            </Alert>
                         )}
 
                         <button
@@ -171,7 +261,145 @@
                         </button>
                     </form>
                 ) : (
-                    <div>Found your RSVP! Update form coming soon...</div>
+                    <form onSubmit={handleUpdateSubmit} className="space-y-6 max-w-lg mx-auto">
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Your Name</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={mainContact.name}
+                                onChange={handleMainContactChange}
+                                required
+                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Email Address</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={mainContact.email}
+                                disabled
+                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 bg-gray-50 cursor-not-allowed"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Your Age Group</label>
+                            <select
+                                name="age"
+                                value={mainContact.age}
+                                onChange={handleMainContactChange}
+                                required
+                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                            >
+                                <option value="">Select age group</option>
+                                {AGE_GROUPS.map(code => (
+                                    <option key={code} value={code}>
+                                        {AGE_GROUP_LABELS[code]}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Which days will you be attending?</label>
+                            <div className="space-y-2">
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="attendingFriday"
+                                        name="attendingFriday"
+                                        checked={mainContact.attendingFriday}
+                                        onChange={handleMainContactChange}
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="attendingFriday" className="ml-2 text-gray-700">
+                                        Friday, June 20
+                                    </label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="attendingSaturday"
+                                        name="attendingSaturday"
+                                        checked={mainContact.attendingSaturday}
+                                        onChange={handleMainContactChange}
+                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="attendingSaturday" className="ml-2 text-gray-700">
+                                        Saturday, June 21
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">Number of Additional Guests</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={guestCount}
+                                onChange={handleGuestCountChange}
+                                required
+                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                            />
+                        </div>
+
+                        {additionalGuests.map((guest, index) => (
+                            <div key={index} className="p-4 bg-orange-50 rounded-lg">
+                                <h3 className="text-lg font-medium text-orange-600 mb-4">
+                                    Guest {index + 1}
+                                </h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-gray-700 mb-2">Name</label>
+                                        <input
+                                            type="text"
+                                            value={guest.name}
+                                            onChange={(e) => handleGuestChange(index, 'name', e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 mb-2">Age Group</label>
+                                        <select
+                                            value={guest.age}
+                                            onChange={(e) => handleGuestChange(index, 'age', e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                                        >
+                                            <option value="">Select age group</option>
+                                            {AGE_GROUPS.map(code => (
+                                                <option key={code} value={code}>
+                                                    {AGE_GROUP_LABELS[code]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {submitStatus.message && (
+                            <Alert variant={submitStatus.type === 'error' ? 'destructive' : 'default'}>
+                                <AlertDescription>{submitStatus.message}</AlertDescription>
+                            </Alert>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
+                                isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 hover:scale-105'
+                            }`}
+                        >
+                            {isSubmitting ? 'Updating...' : 'Update RSVP'}
+                        </button>
+                    </form>
                 )}
             </section>
         );
@@ -447,14 +675,6 @@
                                     <h4 className="font-bold text-red-700">Already RSVP'd</h4>
                                     <div className="mt-2 text-red-700">
                                         <p>{submitStatus.message}</p>
-                                        <button
-                                            onClick={() => {
-                                                document.getElementById('update-rsvp-form')?.scrollIntoView({ behavior: 'smooth' });
-                                            }}
-                                            className="mt-2 text-blue-600 hover:text-blue-800 underline"
-                                        >
-                                            Click here to update your existing RSVP
-                                        </button>
                                     </div>
                                 </div>
                             )}
