@@ -67,6 +67,7 @@
     </main>
 
     <script type="text/babel">
+
     // Configuration
     const API_ENDPOINTS = {
         submit: 'https://n2ltx01vri.execute-api.us-east-1.amazonaws.com/prod/rsvp',
@@ -309,6 +310,8 @@
                 return true;
             };
 
+            const [existingRSVPError, setExistingRSVPError] = React.useState(false);
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 
@@ -319,6 +322,7 @@
                 setIsSubmitting(true);
                 setSubmitStatus({ type: '', message: '' });
                 setDetailedError('');
+                setExistingRSVPError(false);
 
                 // Create the guests array including the main contact with age
                 const allGuests = [
@@ -366,14 +370,18 @@
                     });
 
                     const responseData = await response.json();
-                    console.log('API Response:', responseData);
+
+                    if (response.status === 409) {
+                        setExistingRSVPError(true);
+                        setSubmitStatus({
+                            type: 'error',
+                            message: responseData.message
+                        });
+                        return;
+                    }
 
                     if (!response.ok) {
-                        let errorMessage = responseData.message || 'Error submitting RSVP';
-                        if (responseData.detail) {
-                            errorMessage += '\n' + JSON.stringify(responseData.detail);
-                        }
-                        throw new Error(errorMessage);
+                        throw new Error(responseData.message || 'Error submitting RSVP');
                     }
 
                     setSubmitStatus({
@@ -383,13 +391,6 @@
                     setConfirmationId(responseData.confirmationId);
 
                 } catch (error) {
-                    console.error('Submission error details:', {
-                        error: error.toString(),
-                        formData,
-                        guests: formData.guests
-                    });
-                    
-                    setDetailedError(error.toString());
                     setSubmitStatus({
                         type: 'error',
                         message: error.message || 'Error submitting RSVP. Please try again later.'
@@ -403,192 +404,196 @@
                 <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
                     <h2 className="text-3xl font-bold text-orange-600 mb-6 text-center">RSVP by May 1st</h2>
                     
-                    {submitStatus.message && (
-                        <div className={`p-6 mb-6 rounded-lg shadow-md ${
-                            submitStatus.type === 'success' 
-                                ? 'bg-green-50 border-2 border-green-500' 
-                                : 'bg-red-50 border-2 border-red-500'
-                        }`}>
-                            {submitStatus.type === 'success' ? (
-                                <div className="flex flex-col items-center text-center">
-                                    <svg className="w-16 h-16 text-green-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <h3 className="text-xl font-bold text-green-700 mb-2">Reservation Confirmed!</h3>
-                                    <p className="text-green-700">{submitStatus.message}</p>
-                                    <p className="mt-4 text-sm text-green-600">
-                                        If you need to make any changes to your RSVP, please contact Kaitlyn Tanner.
-                                    </p>
-                                    <button
-                                        onClick={() => {
-                                            resetForm();
-                                            setSubmitStatus({ type: '', message: '' });
-                                            setConfirmationId('');
-                                        }}
-                                        className="mt-6 bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
-                                    >
-                                        Submit Another RSVP
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="text-center">
-                                    <h3 className="text-xl font-bold text-red-700 mb-2">Submission Error</h3>
-                                    <p className="text-red-700">{submitStatus.message}</p>
-                                    {detailedError && (
-                                        <p className="mt-2 text-sm text-red-600">Error details: {detailedError}</p>
-                                    )}
+                    {submitStatus.type === 'success' ? (
+                        // Success message
+                        <div className="text-center">
+                            <div className="mb-6 p-6 bg-green-50 border-2 border-green-500 rounded-lg">
+                                <svg 
+                                    className="w-16 h-16 mx-auto text-green-500 mb-4" 
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24" 
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path 
+                                        strokeLinecap="round" 
+                                        strokeLinejoin="round" 
+                                        strokeWidth="2" 
+                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    ></path>
+                                </svg>
+                                <h3 className="text-xl font-bold text-green-700 mb-2">
+                                    RSVP Successful!
+                                </h3>
+                                <p className="text-green-700 mb-4">
+                                    {submitStatus.message}
+                                </p>
+                                <p className="text-sm text-green-600 mb-4">
+                                    Confirmation ID: {confirmationId}
+                                </p>
+                                <button
+                                    onClick={resetForm}
+                                    className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                                >
+                                    Submit Another RSVP
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        // RSVP Form
+                        <>
+                            {existingRSVPError && (
+                                <div className="mb-6 p-4 bg-red-50 border-2 border-red-500 rounded-lg">
+                                    <h4 className="font-bold text-red-700">Already RSVP'd</h4>
+                                    <div className="mt-2 text-red-700">
+                                        <p>{submitStatus.message}</p>
+                                        <button
+                                            onClick={() => {
+                                                document.getElementById('update-rsvp-form')?.scrollIntoView({ behavior: 'smooth' });
+                                            }}
+                                            className="mt-2 text-blue-600 hover:text-blue-800 underline"
+                                        >
+                                            Click here to update your existing RSVP
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                        </div>
-                    )}
 
+                            <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto">
+                                <div>
+                                    <label className="block text-lg font-medium text-gray-700 mb-2">Your Name</label>
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value={mainContact.name}
+                                        onChange={handleMainContactChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-lg font-medium text-gray-700 mb-2">Email Address</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={mainContact.email}
+                                        onChange={handleMainContactChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-lg font-medium text-gray-700 mb-2">Your Age Group</label>
+                                    <select
+                                        name="age"
+                                        value={mainContact.age}
+                                        onChange={handleMainContactChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                    >
+                                        <option value="">Select age group</option>
+                                        {AGE_GROUPS.map(code => (
+                                            <option key={code} value={code}>
+                                                {AGE_GROUP_LABELS[code]}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto">
-                        <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Your Name</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={mainContact.name}
-                                onChange={handleMainContactChange}
-                                required
-                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Email Address</label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={mainContact.email}
-                                onChange={handleMainContactChange}
-                                required
-                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Your Age Group</label>
-                            <select
-                                name="age"
-                                value={mainContact.age}
-                                onChange={handleMainContactChange}
-                                required
-                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                            >
-                                <option value="">Select age group</option>
-                                {AGE_GROUPS.map(code => (
-                                    <option key={code} value={code}>
-                                        {AGE_GROUP_LABELS[code]}
-                                    </option>
+                                <div>
+                                    <label className="block text-lg font-medium text-gray-700 mb-2">Which days will you be attending?</label>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                id="attendingFriday"
+                                                name="attendingFriday"
+                                                checked={mainContact.attendingFriday}
+                                                onChange={handleMainContactChange}
+                                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                            />
+                                            <label htmlFor="attendingFriday" className="ml-2 text-gray-700">
+                                                Friday, June 20
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                id="attendingSaturday"
+                                                name="attendingSaturday"
+                                                checked={mainContact.attendingSaturday}
+                                                onChange={handleMainContactChange}
+                                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                            />
+                                            <label htmlFor="attendingSaturday" className="ml-2 text-gray-700">
+                                                Saturday, June 21
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-lg font-medium text-gray-700 mb-2">Number of Guests (Maximum 20)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={guestCount}
+                                        onChange={handleGuestCountChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                    />
+                                </div>
+                                {additionalGuests.map((guest, index) => (
+                                        <div key={index} className="p-4 bg-orange-50 rounded-lg">
+                                            <h3 className="text-lg font-medium text-orange-600 mb-4">
+                                                Guest {index + 1}
+                                            </h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-gray-700 mb-2">Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={guest.name}
+                                                    onChange={(e) => handleGuestChange(index, 'name', e.target.value)}
+                                                    required
+                                                    className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-gray-700 mb-2">Age Group</label>
+                                                <select
+                                                    value={guest.age}
+                                                    onChange={(e) => handleGuestChange(index, 'age', e.target.value)}
+                                                    required
+                                                    className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
+                                                >
+                                                    <option value="">Select age group</option>
+                                                    {AGE_GROUPS.map(code => (
+                                                        <option key={code} value={code}>
+                                                            {AGE_GROUP_LABELS[code]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
                                 ))}
-                            </select>
-                        </div>
 
-                        <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Which days will you be attending?</label>
-                            <div className="space-y-2">
-                                <div className="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        id="attendingFriday"
-                                        name="attendingFriday"
-                                        checked={mainContact.attendingFriday}
-                                        onChange={handleMainContactChange}
-                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="attendingFriday" className="ml-2 text-gray-700">
-                                        Friday, June 20
-                                    </label>
+                                <div className="flex flex-col space-y-4">
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
+                                            isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 hover:scale-105'
+                                        }`}
+                                    >
+                                        {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
+                                    </button>
                                 </div>
-                                <div className="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        id="attendingSaturday"
-                                        name="attendingSaturday"
-                                        checked={mainContact.attendingSaturday}
-                                        onChange={handleMainContactChange}
-                                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="attendingSaturday" className="ml-2 text-gray-700">
-                                        Saturday, June 21
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label className="block text-lg font-medium text-gray-700 mb-2">Number of Guests (Maximum 20)</label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={guestCount}
-                                onChange={handleGuestCountChange}
-                                required
-                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                            />
-                        </div>
-                        {additionalGuests.map((guest, index) => (
-                                <div key={index} className="p-4 bg-orange-50 rounded-lg">
-                                    <h3 className="text-lg font-medium text-orange-600 mb-4">
-                                        Guest {index + 1}
-                                    </h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-gray-700 mb-2">Name</label>
-                                        <input
-                                            type="text"
-                                            value={guest.name}
-                                            onChange={(e) => handleGuestChange(index, 'name', e.target.value)}
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-700 mb-2">Age Group</label>
-                                        <select
-                                            value={guest.age}
-                                            onChange={(e) => handleGuestChange(index, 'age', e.target.value)}
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
-                                        >
-                                            <option value="">Select age group</option>
-                                            {AGE_GROUPS.map(code => (
-                                                <option key={code} value={code}>
-                                                    {AGE_GROUP_LABELS[code]}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-
-                        <div className="flex flex-col space-y-4">
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className={`w-full bg-blue-500 text-white text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 ${
-                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 hover:scale-105'
-                                }`}
-                            >
-                                {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    document.getElementById('update-rsvp-form').scrollIntoView({ 
-                                        behavior: 'smooth',
-                                        block: 'start'
-                                    });
-                                }}
-                                className="w-full bg-gray-100 text-gray-700 text-lg font-bold py-3 px-6 rounded-lg transform transition-all duration-200 hover:bg-gray-200 hover:scale-105"
-                            >
-                                Change Existing RSVP
-                            </button>
-                        </div>
-                    </form>
+                            </form>
+                        </>
+                    )}
                 </section>
             );
         };

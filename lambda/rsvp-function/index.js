@@ -1,16 +1,39 @@
-//UpdateRSVP
-const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+//UpdateRSVP_1
+const { 
+    DynamoDBClient, 
+    PutItemCommand, 
+    GetItemCommand,
+    QueryCommand  // Add this import
+} = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 
 const dynamoDB = new DynamoDBClient({ region: 'us-east-1' });
 const VALID_AGE_GROUPS = ['A', 'T', 'K', 'L', 'B'];
+
+// Check for existing RSVP
+const checkExistingRSVP = async (email) => {
+    const params = {
+        TableName: process.env.RSVP_TABLE_NAME,
+        KeyConditionExpression: '#email = :email',
+        ExpressionAttributeNames: {
+            '#email': 'email'
+        },
+        ExpressionAttributeValues: marshall({
+            ':email': email.toLowerCase()
+        }),
+        Limit: 1
+    };
+
+    const { Items } = await dynamoDB.send(new QueryCommand(params));
+    return Items && Items.length > 0;
+};
 
 // RSVP submission handler
 const submitHandler = async (rsvpData, corsHeaders) => {
     try {
         // Log the request body
         console.log('Parsed RSVP data:', JSON.stringify(rsvpData, null, 2));
-
+        
         // Log validation details
         console.log('Validation details:', {
             mainContact: {
@@ -33,32 +56,41 @@ const submitHandler = async (rsvpData, corsHeaders) => {
                 validAgeGroups: VALID_AGE_GROUPS
             }
         });
-
+        
         // Main contact validation
-        if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age || 
-            (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
-            console.log('Main contact validation failed');
+        if (!rsvpData.mainContact?.email) {
             return {
                 statusCode: 400,
                 headers: corsHeaders,
                 body: JSON.stringify({
-                    message: 'Invalid main contact data',
+                    message: 'Email is required',
                     detail: {
-                        mainContact: rsvpData.mainContact,
                         validation: {
-                            hasEmail: !!rsvpData.mainContact?.email,
-                            hasName: !!rsvpData.mainContact?.name,
-                            hasAge: !!rsvpData.mainContact?.age,
-                            ageValid: VALID_AGE_GROUPS.includes(rsvpData.mainContact?.age),
-                            hasAttendanceDays: rsvpData.mainContact?.attendingFriday || rsvpData.mainContact?.attendingSaturday
+                            hasEmail: false
                         }
                     }
                 })
             };
         }
-
-        // Validate main contact age group
-        if (!VALID_AGE_GROUPS.includes(rsvpData.mainContact.age)) {
+        
+        // Check for existing RSVP
+        const exists = await checkExistingRSVP(rsvpData.mainContact.email);
+        if (exists) {
+            return {
+                statusCode: 409,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'An RSVP with this email already exists',
+                    detail: {
+                        email: rsvpData.mainContact.email,
+                        suggestion: 'Please use the Update RSVP form to modify your existing RSVP'
+                    }
+                })
+            };
+        }        
+            
+            // Validate main contact age group
+            if (!VALID_AGE_GROUPS.includes(rsvpData.mainContact.age)) {
             console.log('Main contact age validation failed');
             return {
                 statusCode: 400,
@@ -204,13 +236,6 @@ const submitHandler = async (rsvpData, corsHeaders) => {
 
 // Handler for looking up RSVPs
 const lookupHandler = async (email, corsHeaders) => {
-    const params = {
-        TableName: process.env.RSVP_TABLE_NAME,
-        Key: marshall({
-            email: email.toLowerCase(),
-        }),
-    };
-
     if (!process.env.RSVP_TABLE_NAME) {
         console.error('Missing RSVP_TABLE_NAME environment variable');
         return {
@@ -223,9 +248,23 @@ const lookupHandler = async (email, corsHeaders) => {
     }
 
     try {
-        const { Item } = await dynamoDB.send(new GetItemCommand(params));
+        // Use QueryCommand instead of GetItemCommand
+        const params = {
+            TableName: process.env.RSVP_TABLE_NAME,
+            KeyConditionExpression: '#email = :email',
+            ExpressionAttributeNames: {
+                '#email': 'email'
+            },
+            ExpressionAttributeValues: marshall({
+                ':email': email.toLowerCase()
+            }),
+            ScanIndexForward: false, // This will sort in descending order (newest first)
+            Limit: 1 // We only want the most recent RSVP
+        };
+
+        const { Items } = await dynamoDB.send(new QueryCommand(params));
         
-        if (!Item) {
+        if (!Items || Items.length === 0) {
             return {
                 statusCode: 404,
                 headers: corsHeaders,
@@ -233,7 +272,7 @@ const lookupHandler = async (email, corsHeaders) => {
             };
         }
 
-        const rsvpData = unmarshall(Item);
+        const rsvpData = unmarshall(Items[0]);
         return {
             statusCode: 200,
             headers: corsHeaders,
@@ -254,39 +293,161 @@ const lookupHandler = async (email, corsHeaders) => {
 
 // Handler for updating RSVPs
 const updateHandler = async (rsvpData, corsHeaders) => {
-    // Validate the update data (similar to original handler)
-    if (!rsvpData.mainContact?.email || !rsvpData.mainContact?.name || !rsvpData.mainContact?.age ||
-        (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
-        return {
-            statusCode: 400,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Invalid main contact data' })
-        };
-    }
-
-    if (!Array.isArray(rsvpData.guests)) {
-        return {
-            statusCode: 400,
-            headers: corsHeaders,
-            body: JSON.stringify({ 
-                message: 'Guests must be an array' 
-            })
-        };
-    }
-
     try {
+        // Log the update request
+        console.log('Update RSVP data:', JSON.stringify(rsvpData, null, 2));
+
+        // Basic main contact validation
+        if (!rsvpData.mainContact?.email) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Email is required',
+                    detail: { validation: { hasEmail: false } }
+                })
+            };
+        }
+
+        // Verify this RSVP exists before allowing update
+        const params = {
+            TableName: process.env.RSVP_TABLE_NAME,
+            KeyConditionExpression: '#email = :email',
+            ExpressionAttributeNames: {
+                '#email': 'email'
+            },
+            ExpressionAttributeValues: marshall({
+                ':email': rsvpData.mainContact.email.toLowerCase()
+            }),
+            ScanIndexForward: false,
+            Limit: 1
+        };
+
+        const { Items } = await dynamoDB.send(new QueryCommand(params));
+        
+        if (!Items || Items.length === 0) {
+            return {
+                statusCode: 404,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'No existing RSVP found for this email. Please submit a new RSVP instead.',
+                    detail: { email: rsvpData.mainContact.email }
+                })
+            };
+        }
+
+        // Complete main contact validation
+        if (!rsvpData.mainContact?.name || !rsvpData.mainContact?.age ||
+            (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid main contact data',
+                    detail: {
+                        validation: {
+                            hasName: !!rsvpData.mainContact?.name,
+                            hasAge: !!rsvpData.mainContact?.age,
+                            hasAttendanceDays: rsvpData.mainContact?.attendingFriday || 
+                                             rsvpData.mainContact?.attendingSaturday
+                        }
+                    }
+                })
+            };
+        }
+
+        // Validate main contact age group
+        if (!VALID_AGE_GROUPS.includes(rsvpData.mainContact.age)) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid age group for main contact',
+                    detail: {
+                        providedAge: rsvpData.mainContact.age,
+                        validAgeGroups: VALID_AGE_GROUPS
+                    }
+                })
+            };
+        }
+
+        // Guest array validation
+        if (!Array.isArray(rsvpData.guests)) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Guests must be an array',
+                    detail: { 
+                        receivedType: typeof rsvpData.guests,
+                        guests: rsvpData.guests 
+                    }
+                })
+            };
+        }
+
+        // Guest count validation
+        if (rsvpData.totalGuests && rsvpData.totalGuests !== rsvpData.guests.length) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Guest count mismatch',
+                    detail: {
+                        expected: rsvpData.totalGuests,
+                        actual: rsvpData.guests.length
+                    }
+                })
+            };
+        }
+
+        // Individual guest validation
+        console.log('Validating guest information');
+        const guestValidation = rsvpData.guests.map((guest, index) => {
+            const validation = {
+                index,
+                name: guest.name,
+                age: guest.age,
+                nameValid: !!guest.name?.trim(),
+                ageValid: VALID_AGE_GROUPS.includes(guest.age)
+            };
+            console.log(`Guest ${index} validation:`, validation);
+            return validation;
+        });
+
+        const invalidGuests = guestValidation.filter(g => !g.nameValid || !g.ageValid);
+
+        if (invalidGuests.length > 0) {
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Invalid guest data',
+                    detail: {
+                        invalidGuests,
+                        validAgeGroups: VALID_AGE_GROUPS,
+                        allValidations: guestValidation
+                    }
+                })
+            };
+        }
+
+        // Proceed with update
         const submissionDate = new Date().toISOString();
         const item = {
             email: rsvpData.mainContact.email.toLowerCase(),
             submissionDate,
-            name: rsvpData.mainContact.name,
+            name: rsvpData.mainContact.name.trim(),
             age: rsvpData.mainContact.age,
             attendance: {
                 friday: rsvpData.mainContact.attendingFriday,
                 saturday: rsvpData.mainContact.attendingSaturday
             },
             totalGuests: rsvpData.guests.length,
-            guests: rsvpData.guests
+            guests: rsvpData.guests.map(guest => ({
+                name: guest.name.trim(),
+                age: guest.age
+            }))
         };
 
         await dynamoDB.send(new PutItemCommand({
@@ -309,7 +470,11 @@ const updateHandler = async (rsvpData, corsHeaders) => {
             headers: corsHeaders,
             body: JSON.stringify({
                 message: 'Error updating RSVP',
-                error: error.message
+                error: error.message,
+                detail: {
+                    type: error.constructor.name,
+                    stack: error.stack
+                }
             })
         };
     }
