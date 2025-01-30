@@ -55,9 +55,6 @@
             <!-- RSVP Form -->
             <div id="rsvp-form"></div>
 
-            <!-- Update RSVP Form -->
-            <div id="update-rsvp-form"></div>
-
             <!-- Fun Footer -->
             <div class="text-center text-gray-600">
                 <p class="text-lg">Looking forward to seeing everyone!</p>
@@ -67,9 +64,6 @@
     </main>
 
     <script type="text/babel">
-
-    import React, { useState } from 'react';
-    import { Alert, AlertDescription } from '@/components/ui/alert';
 
     // Configuration
     const API_ENDPOINTS = {
@@ -88,17 +82,33 @@
         'B': 'Baby (1 and under)'
     };
 
+    // Simple Alert Component
+    const Alert = ({ children, variant }) => {
+        const bgColor = variant === 'destructive' ? 'bg-red-50 border-red-500 text-red-700' : 'bg-blue-50 border-blue-500 text-blue-700';
+        return (
+            <div className={`p-4 border-2 rounded-lg ${bgColor}`}>
+                {children}
+            </div>
+        );
+    };
+
+    const AlertDescription = ({ children }) => (
+        <div className="text-sm">
+            {children}
+        </div>
+    );
+
     // UpdateRSVPForm Component
     const UpdateRSVPForm = () => {
-        const [email, setEmail] = useState('');
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState('');
-        const [rsvpData, setRsvpData] = useState(null);
-        const [mainContact, setMainContact] = useState(null);
-        const [guestCount, setGuestCount] = useState(1);
-        const [additionalGuests, setAdditionalGuests] = useState([]);
-        const [isSubmitting, setIsSubmitting] = useState(false);
-        const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
+        const [email, setEmail] = React.useState('');
+        const [loading, setLoading] = React.useState(false);
+        const [error, setError] = React.useState('');
+        const [rsvpData, setRsvpData] = React.useState(null);
+        const [mainContact, setMainContact] = React.useState(null);
+        const [guestCount, setGuestCount] = React.useState(1);
+        const [additionalGuests, setAdditionalGuests] = React.useState([]);
+        const [isSubmitting, setIsSubmitting] = React.useState(false);
+        const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
 
         const handleEmailSubmit = async (e) => {
             e.preventDefault();
@@ -818,9 +828,15 @@
             );
         };
 
+        const App = () => (
+            <React.Fragment>
+                <RSVPForm />
+                <UpdateRSVPForm />
+            </React.Fragment>
+        );        
+
         // Render the React component
-        ReactDOM.render(<RSVPForm />, document.getElementById('rsvp-form'));
-        ReactDOM.render(<UpdateRSVPForm />, document.getElementById('update-rsvp-form'));
+        ReactDOM.render(<App />, document.getElementById('rsvp-form'));
     </script>
 </body>
 </html>
