@@ -292,15 +292,6 @@ const lookupHandler = async (email, corsHeaders) => {
     }
 };
 
-// Handler for updating RSVPs
-const { 
-    DynamoDBClient, 
-    UpdateItemCommand  // Add this import
-} = require('@aws-sdk/client-dynamodb');
-const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
-
-// ... (previous imports and setup)
-
 const updateHandler = async (rsvpData, corsHeaders) => {
     try {
         // Log the update request

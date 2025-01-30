@@ -203,7 +203,9 @@
                     },
                     ...additionalGuests
                 ],
-                totalGuests: guestCount
+                totalGuests: guestCount,
+                // Add the original submission date from the lookup
+                submissionDate: rsvpData.submissionDate
             };
 
             try {
