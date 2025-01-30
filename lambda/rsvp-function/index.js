@@ -293,6 +293,14 @@ const lookupHandler = async (email, corsHeaders) => {
 };
 
 // Handler for updating RSVPs
+const { 
+    DynamoDBClient, 
+    UpdateItemCommand  // Add this import
+} = require('@aws-sdk/client-dynamodb');
+const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
+
+// ... (previous imports and setup)
+
 const updateHandler = async (rsvpData, corsHeaders) => {
     try {
         // Log the update request
@@ -414,21 +422,20 @@ const updateHandler = async (rsvpData, corsHeaders) => {
                 submissionDate: rsvpData.submissionDate || new Date().toISOString()
             }),
             UpdateExpression: 'SET #name = :name, age = :age, ' +
-                              'attendance.#friday = :friday, ' +
-                              'attendance.#saturday = :saturday, ' +
+                              'attendance = :attendance, ' +
                               'totalGuests = :totalGuests, ' +
                               'guests = :guests, ' +
                               'lastUpdatedDate = :lastUpdatedDate',
             ExpressionAttributeNames: {
-                '#name': 'name',
-                '#friday': 'friday',
-                '#saturday': 'saturday'
+                '#name': 'name'
             },
             ExpressionAttributeValues: marshall({
                 ':name': rsvpData.mainContact.name.trim(),
                 ':age': rsvpData.mainContact.age,
-                ':friday': rsvpData.mainContact.attendingFriday,
-                ':saturday': rsvpData.mainContact.attendingSaturday,
+                ':attendance': {
+                    friday: rsvpData.mainContact.attendingFriday,
+                    saturday: rsvpData.mainContact.attendingSaturday
+                },
                 ':totalGuests': rsvpData.guests.length,
                 ':guests': rsvpData.guests.map(guest => ({
                     name: guest.name.trim(),
