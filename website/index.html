@@ -28,7 +28,7 @@
 
             <!-- Countdown Banner -->
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8 text-center transform hover:scale-105 transition-transform duration-300">
-                <h2 class="text-3xl font-bold text-orange-500 mb-2">June 20-21, 2025</h2>
+                <h2 class="text-3xl font-bold text-orange-500 mb-2" style="color: #00a7bf">June 20-21, 2025</h2>
                 <p class="text-xl text-gray-700">Join us for two days of family, fun, and memories</p>
                 <div class="text-2xl font-bold text-orange-600 mt-4">Save the date!</div>
             </div>
@@ -237,7 +237,7 @@
 
         return (
             <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
-                <h2 className="text-3xl font-bold mb-6 text-center" style="color: #00a7bf">Update Your RSVP</h2>
+                <h2 className="text-3xl font-bold mb-6 text-center" style={{ color: "#00a7bf" }}>Update Your RSVP</h2>
                 
                 {!rsvpData ? (
                     <form onSubmit={handleEmailSubmit} className="max-w-lg mx-auto">
@@ -640,7 +640,7 @@
 
             return (
                 <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
-                    <h2 className="text-3xl font-bold mb-6 text-center" style="color: #00a7bf">RSVP by May 1st</h2>
+                    <h2 className="text-3xl font-bold mb-6 text-center" style={{ color: "#00a7bf" }}>RSVP by May 1st</h2>
                     
                     {submitStatus.type === 'success' ? (
                         // Success message
