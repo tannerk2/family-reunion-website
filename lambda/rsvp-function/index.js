@@ -3,7 +3,8 @@ const {
     DynamoDBClient, 
     PutItemCommand, 
     GetItemCommand,
-    QueryCommand  // Add this import
+    QueryCommand,
+    UpdateItemCommand
 } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 
@@ -80,7 +81,7 @@ const submitHandler = async (rsvpData, corsHeaders) => {
                 statusCode: 409,
                 headers: corsHeaders,
                 body: JSON.stringify({
-                    message: 'An RSVP with this email already exists, Please use the Update RSVP form to change your RSVP',
+                    message: 'An RSVP with this email already exists, please use the Update Your RSVP form below',
                     detail: {
                         email: rsvpData.mainContact.email,
                         suggestion: 'Please use the Update RSVP form to modify your existing RSVP'
@@ -309,33 +310,6 @@ const updateHandler = async (rsvpData, corsHeaders) => {
             };
         }
 
-        // Verify this RSVP exists before allowing update
-        const params = {
-            TableName: process.env.RSVP_TABLE_NAME,
-            KeyConditionExpression: '#email = :email',
-            ExpressionAttributeNames: {
-                '#email': 'email'
-            },
-            ExpressionAttributeValues: marshall({
-                ':email': rsvpData.mainContact.email.toLowerCase()
-            }),
-            ScanIndexForward: false,
-            Limit: 1
-        };
-
-        const { Items } = await dynamoDB.send(new QueryCommand(params));
-        
-        if (!Items || Items.length === 0) {
-            return {
-                statusCode: 404,
-                headers: corsHeaders,
-                body: JSON.stringify({
-                    message: 'No existing RSVP found for this email. Please submit a new RSVP instead.',
-                    detail: { email: rsvpData.mainContact.email }
-                })
-            };
-        }
-
         // Complete main contact validation
         if (!rsvpData.mainContact?.name || !rsvpData.mainContact?.age ||
             (!rsvpData.mainContact?.attendingFriday && !rsvpData.mainContact?.attendingSaturday)) {
@@ -432,35 +406,49 @@ const updateHandler = async (rsvpData, corsHeaders) => {
             };
         }
 
-        // Proceed with update
-        const submissionDate = new Date().toISOString();
-        const item = {
-            email: rsvpData.mainContact.email.toLowerCase(),
-            submissionDate,
-            name: rsvpData.mainContact.name.trim(),
-            age: rsvpData.mainContact.age,
-            attendance: {
-                friday: rsvpData.mainContact.attendingFriday,
-                saturday: rsvpData.mainContact.attendingSaturday
+        // Prepare update parameters
+        const updateParams = {
+            TableName: process.env.RSVP_TABLE_NAME,
+            Key: marshall({
+                email: rsvpData.mainContact.email.toLowerCase(),
+                submissionDate: rsvpData.submissionDate || new Date().toISOString()
+            }),
+            UpdateExpression: 'SET #name = :name, age = :age, ' +
+                              'attendance.#friday = :friday, ' +
+                              'attendance.#saturday = :saturday, ' +
+                              'totalGuests = :totalGuests, ' +
+                              'guests = :guests, ' +
+                              'lastUpdatedDate = :lastUpdatedDate',
+            ExpressionAttributeNames: {
+                '#name': 'name',
+                '#friday': 'friday',
+                '#saturday': 'saturday'
             },
-            totalGuests: rsvpData.guests.length,
-            guests: rsvpData.guests.map(guest => ({
-                name: guest.name.trim(),
-                age: guest.age
-            }))
+            ExpressionAttributeValues: marshall({
+                ':name': rsvpData.mainContact.name.trim(),
+                ':age': rsvpData.mainContact.age,
+                ':friday': rsvpData.mainContact.attendingFriday,
+                ':saturday': rsvpData.mainContact.attendingSaturday,
+                ':totalGuests': rsvpData.guests.length,
+                ':guests': rsvpData.guests.map(guest => ({
+                    name: guest.name.trim(),
+                    age: guest.age
+                })),
+                ':lastUpdatedDate': new Date().toISOString()
+            }),
+            ReturnValues: 'ALL_NEW'
         };
 
-        await dynamoDB.send(new PutItemCommand({
-            TableName: process.env.RSVP_TABLE_NAME,
-            Item: marshall(item)
-        }));
+        // Execute the update
+        const command = new UpdateItemCommand(updateParams);
+        const result = await dynamoDB.send(command);
 
         return {
             statusCode: 200,
             headers: corsHeaders,
             body: JSON.stringify({
                 message: 'RSVP updated successfully',
-                confirmationId: submissionDate
+                confirmationId: unmarshall(result.Attributes).submissionDate
             })
         };
     } catch (error) {
