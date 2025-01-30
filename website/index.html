@@ -110,7 +110,7 @@
         const [isSubmitting, setIsSubmitting] = React.useState(false);
         const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
 
-        const [isNewRSVPOpen, setIsNewRSVPOpen] = useState(true);
+        const [isNewRSVPOpen, setIsNewRSVPOpen] = React.useState(true);
 
         const handleEmailSubmit = async (e) => {
             e.preventDefault();
