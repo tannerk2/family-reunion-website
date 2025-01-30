@@ -80,7 +80,7 @@ const submitHandler = async (rsvpData, corsHeaders) => {
                 statusCode: 409,
                 headers: corsHeaders,
                 body: JSON.stringify({
-                    message: 'An RSVP with this email already exists',
+                    message: 'An RSVP with this email already exists, Please use the Update RSVP form to change your RSVP',
                     detail: {
                         email: rsvpData.mainContact.email,
                         suggestion: 'Please use the Update RSVP form to modify your existing RSVP'
