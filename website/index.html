@@ -211,6 +211,13 @@
             setIsSubmitting(true);
             setSubmitStatus({ type: '', message: '' });
 
+            // Convert guestCount to number if it's still a string
+            if (guestCount === '') {
+                setGuestCount(1);
+            }
+            
+            const numericGuestCount = typeof guestCount === 'string' ? parseInt(guestCount, 10) || 1 : guestCount;
+            
             const updateData = {
                 mainContact: {
                     ...mainContact,
@@ -223,7 +230,7 @@
                     },
                     ...additionalGuests
                 ],
-                totalGuests: guestCount,
+                totalGuests: numericGuestCount,
                 // Add the original submission date from the lookup
                 submissionDate: rsvpData.submissionDate
             };
