@@ -168,11 +168,9 @@
                 const count = Math.min(Math.max(numValue, 1), 20);
                 setGuestCount(count);
                 
-                // Update the guest array as before
                 if (count === 1) {
                     setAdditionalGuests([]);
                 } else {
-                    // Your existing code for managing guest slots
                     const currentGuests = [...additionalGuests];
                     if (count - 1 > currentGuests.length) {
                         // Add more guest slots
@@ -584,6 +582,11 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 
+                // Ensure guestCount is a number before validation
+                if (guestCount === '') {
+                    setGuestCount(1);
+                }
+                
                 if (!validateForm()) {
                     return;
                 }
@@ -787,14 +790,16 @@
                                 <div>
                                     <label className="block text-lg font-medium text-gray-700 mb-2">Total Number of Guests (Maximum 20)</label>
                                     <input
-                                        type="number"
-                                        min="1"
-                                        max="20"
+                                        type="text" // Changed from "number" to "text"
                                         value={guestCount}
                                         onChange={handleGuestCountChange}
+                                        onBlur={handleGuestCountBlur}
                                         required
                                         className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
                                     />
+                                    {guestCountTouched && guestCount === '' && (
+                                        <p className="text-orange-500 text-sm mt-1">Please enter a number between 1 and 20</p>
+                                    )}
                                 </div>
                                 {additionalGuests.map((guest, index) => (
                                         <div key={index} className="p-4 bg-orange-50 rounded-lg">
