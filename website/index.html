@@ -465,6 +465,7 @@
                 attendingSaturday: false
             });
             const [guestCount, setGuestCount] = React.useState(1);
+            const [guestCountTouched, setGuestCountTouched] = React.useState(false);
             const [additionalGuests, setAdditionalGuests] = React.useState([]);
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
@@ -487,23 +488,42 @@
             };
 
             const handleGuestCountChange = (e) => {
-                const count = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 20);
-                setGuestCount(count);
+                // Allow the field to be temporarily empty during typing
+                const value = e.target.value;
+                if (value === '') {
+                    setGuestCount('');
+                    setGuestCountTouched(true);
+                    return;
+                }
                 
-                if (count === 1) {
-                    setAdditionalGuests([]);
-                } else {
-                    const currentGuests = [...additionalGuests];
-                    if (count - 1 > currentGuests.length) {
-                        // Add more guest slots
-                        const newGuests = Array(count - 1 - currentGuests.length)
-                            .fill(null)
-                            .map(() => ({ name: '', age: '' }));
-                        setAdditionalGuests([...currentGuests, ...newGuests]);
+                // Convert to number and apply constraints when a valid number is entered
+                const numValue = parseInt(value, 10);
+                if (!isNaN(numValue)) {
+                    const count = Math.min(Math.max(numValue, 1), 20);
+                    setGuestCount(count);
+                    
+                    if (count === 1) {
+                        setAdditionalGuests([]);
                     } else {
-                        // Remove excess guest slots
-                        setAdditionalGuests(currentGuests.slice(0, count - 1));
+                        const currentGuests = [...additionalGuests];
+                        if (count - 1 > currentGuests.length) {
+                            // Add more guest slots
+                            const newGuests = Array(count - 1 - currentGuests.length)
+                                .fill(null)
+                                .map(() => ({ name: '', age: '' }));
+                            setAdditionalGuests([...currentGuests, ...newGuests]);
+                        } else {
+                            // Remove excess guest slots
+                            setAdditionalGuests(currentGuests.slice(0, count - 1));
+                        }
                     }
+                }
+            };
+
+            const handleGuestCountBlur = () => {
+                // If the field is empty when focus is lost, default to 1
+                if (guestCount === '') {
+                    setGuestCount(1);
                 }
             };
 
