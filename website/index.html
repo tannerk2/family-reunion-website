@@ -102,6 +102,7 @@
         const [rsvpData, setRsvpData] = React.useState(null);
         const [mainContact, setMainContact] = React.useState(null);
         const [guestCount, setGuestCount] = React.useState(1);
+        const [guestCountTouched, setGuestCountTouched] = React.useState(false);
         const [additionalGuests, setAdditionalGuests] = React.useState([]);
         const [isSubmitting, setIsSubmitting] = React.useState(false);
         const [submitStatus, setSubmitStatus] = React.useState({ type: '', message: '' });
@@ -153,21 +154,44 @@
         };
 
         const handleGuestCountChange = (e) => {
-            const count = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 20);
-            setGuestCount(count);
+            // Allow the field to be temporarily empty during typing
+            const value = e.target.value;
+            if (value === '') {
+                setGuestCount('');
+                setGuestCountTouched(true);
+                return;
+            }
             
-            if (count === 1) {
-                setAdditionalGuests([]);
-            } else {
-                const currentGuests = [...additionalGuests];
-                if (count - 1 > currentGuests.length) {
-                    const newGuests = Array(count - 1 - currentGuests.length)
-                        .fill(null)
-                        .map(() => ({ name: '', age: '' }));
-                    setAdditionalGuests([...currentGuests, ...newGuests]);
+            // Convert to number and apply constraints when a valid number is entered
+            const numValue = parseInt(value, 10);
+            if (!isNaN(numValue)) {
+                const count = Math.min(Math.max(numValue, 1), 20);
+                setGuestCount(count);
+                
+                // Update the guest array as before
+                if (count === 1) {
+                    setAdditionalGuests([]);
                 } else {
-                    setAdditionalGuests(currentGuests.slice(0, count - 1));
+                    // Your existing code for managing guest slots
+                    const currentGuests = [...additionalGuests];
+                    if (count - 1 > currentGuests.length) {
+                        // Add more guest slots
+                        const newGuests = Array(count - 1 - currentGuests.length)
+                            .fill(null)
+                            .map(() => ({ name: '', age: '' }));
+                        setAdditionalGuests([...currentGuests, ...newGuests]);
+                    } else {
+                        // Remove excess guest slots
+                        setAdditionalGuests(currentGuests.slice(0, count - 1));
+                    }
                 }
+            }
+        };
+
+        const handleGuestCountBlur = () => {
+            // If the field is empty when focus is lost, default to 1
+            if (guestCount === '') {
+                setGuestCount(1);
             }
         };
 
@@ -346,14 +370,16 @@
                         <div>
                             <label className="block text-lg font-medium text-gray-700 mb-2">Total Number of Guests (Maximum 20)</label>
                             <input
-                                type="number"
-                                min="1"
-                                max="20"
+                                type="text" // Changed from "number" to "text"
                                 value={guestCount}
                                 onChange={handleGuestCountChange}
+                                onBlur={handleGuestCountBlur}
                                 required
-                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                                className="w-full px-4 py-3 rounded-lg border-2 border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-colors duration-200"
                             />
+                            {guestCountTouched && guestCount === '' && (
+                                <p className="text-orange-500 text-sm mt-1">Please enter a number between 1 and 20</p>
+                            )}
                         </div>
 
                         {additionalGuests.map((guest, index) => (
